@@ -1526,17 +1526,22 @@ class Aauth {
 
 		$groups_par = explode('|', $group_par);
 		if(count($groups_par) > 1){
-			$i = 0;
-			foreach ($groups_par as $key => $group_par) {
-				$group_id = $this->get_group_id($group_par);
-				if($i == 0){
+			$this->aauth_db->group_start();
+
+			$igroup = 0;
+			foreach ($groups_par as $key => $group_p) {
+				
+				$group_id = $this->get_group_id($group_p);
+				if($igroup == 0){
 					$this->aauth_db->where('group_id', $group_id);
 				} else {
 					$this->aauth_db->or_where('group_id', $group_id);
 				}
 
-				$i++;
+				$igroup++;
 			}
+
+			$this->aauth_db->group_end();
 		} else {
 			$group_id = $this->get_group_id($group_par);
 			$this->aauth_db->where('group_id', $group_id);
