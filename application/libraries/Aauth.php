@@ -6,7 +6,7 @@
  * Despite ease of use, it has also very advanced features like private messages,
  * groupping, access management, public access etc..
  *
- * @author		Emre Akay <emreakayfb@hotmail.com>
+ * @author	Emre Akay <emreakayfb@hotmail.com>
  * @contributor Jacob Tomlinson
  * @contributor Tim Swagger (Renowne, LLC) <tim@renowne.com>
  * @contributor Raphael Jackstadt <info@rejack.de>
@@ -22,6 +22,13 @@
  * https://github.com/emreakay/CodeIgniter-Aauth
  *
  * @todo separate (on some level) the unvalidated users from the "banned" users
+ * 
+ * Updated for CodeIgniter > 3.0.x and PHP > 8.3 
+ * change lib encrypt for new lib encryption
+ * fix some bugs for php 8.3
+ * 
+ * @author	Fabrice Simonet | emulsion.io
+ * 
  */
 class Aauth {
 
@@ -76,21 +83,21 @@ class Aauth {
 	 * @access public
 	 * @var object
 	 */
-	 public $aauth_db;
+	public $aauth_db;
 
 	/**
 	 * Array to cache permission-ids.
 	 * @access private
 	 * @var array
 	 */
-	 private $cache_perm_id;
+	private $cache_perm_id;
 
 	/**
 	 * Array to cache group-ids.
 	 * @access private
 	 * @var array
 	 */
-	 private $cache_group_id;
+	private $cache_group_id;
 
 	########################
 	# Base Functions
@@ -194,7 +201,7 @@ class Aauth {
 				return false;
 			}
 		}
- 		if( $this->config_vars['login_with_name'] == true){
+		if( $this->config_vars['login_with_name'] == true){
 
 			if( !$identifier OR strlen($pass) < $this->config_vars['min'] OR strlen($pass) > $this->config_vars['max'] )
 			{
@@ -202,15 +209,15 @@ class Aauth {
 				return false;
 			}
 			$db_identifier = 'username';
- 		}else{
-			$this->CI->load->helper('email');
-			if( !valid_email($identifier) OR strlen($pass) < $this->config_vars['min'] OR strlen($pass) > $this->config_vars['max'] )
+		}else{
+
+			if( !filter_var($identifier, FILTER_VALIDATE_EMAIL) OR strlen($pass) < $this->config_vars['min'] OR strlen($pass) > $this->config_vars['max'] )
 			{
 				$this->error($this->CI->lang->line('aauth_error_login_failed_email'));
 				return false;
 			}
 			$db_identifier = 'email';
- 		}
+		}
 
 		// if user is not verified
 		$query = null;
@@ -298,48 +305,46 @@ class Aauth {
 		$row = $query->row();
 
 		// if email and pass matches and not banned
+		$password = ($this->config_vars['use_password_hash'] ? $pass : $this->hash_password($pass, $row->id));
 
-		if ($query->num_rows() != 0) {
-			$password = ($this->config_vars['use_password_hash'] ? $pass : $this->hash_password($pass, $row->id));
+		if ( $query->num_rows() != 0 && $this->verify_password($password, $row->pass) ) {
 
-			if ($this->verify_password($password, $row->pass)) {
-				// If email and pass matches
-				// create session
-				$data = array(
-					'id' => $row->id,
-					'username' => $row->username,
-					'email' => $row->email,
-					'loggedin' => true
+			// If email and pass matches
+			// create session
+			$data = array(
+				'id' => $row->id,
+				'username' => $row->username,
+				'email' => $row->email,
+				'loggedin' => true
+			);
+
+			$this->CI->session->set_userdata($data);
+
+			if ( $remember ){
+				$this->CI->load->helper('string');
+				$expire = $this->config_vars['remember'];
+				$today = date("Y-m-d");
+				$remember_date = date("Y-m-d", strtotime($today . $expire) );
+				$random_string = random_string('alnum', 16);
+				$this->update_remember($row->id, $random_string, $remember_date );
+				$cookie = array(
+					'name'	 => 'user',
+					'value'	 => $row->id . "-" . $random_string,
+					'expire' => 99*999*999,
+					'path'	 => '/',
 				);
-
-				$this->CI->session->set_userdata($data);
-
-				if ($remember){
-					$this->CI->load->helper('string');
-					$expire = $this->config_vars['remember'];
-					$today = date("Y-m-d");
-					$remember_date = date("Y-m-d", strtotime($today . $expire) );
-					$random_string = random_string('alnum', 16);
-					$this->update_remember($row->id, $random_string, $remember_date );
-					$cookie = array(
-						'name'	 => 'user',
-						'value'	 => $row->id . "-" . $random_string,
-						'expire' => 99*999*999,
-						'path'	 => '/',
-					);
-					$this->CI->input->set_cookie($cookie);
-				}
-
-				// update last login
-				$this->update_last_login($row->id);
-				$this->update_activity();
-
-				if($this->config_vars['remove_successful_attempts'] == true){
-					$this->reset_login_attempts();
-				}
-
-				return true;
+				$this->CI->input->set_cookie($cookie);
 			}
+
+			// update last login
+			$this->update_last_login($row->id);
+			$this->update_activity();
+
+			if($this->config_vars['remove_successful_attempts'] == true){
+				$this->reset_login_attempts();
+			}
+
+			return true;
 		}
 		// if not matches
 		else {
@@ -697,7 +702,6 @@ class Aauth {
 	# User Functions
 	########################
 
-	//tested
 	/**
 	 * Create user
 	 * Creates a new user
@@ -783,7 +787,6 @@ class Aauth {
 		}
 	}
 
-	//tested
 	/**
 	 * Update user
 	 * Updates existing user details
@@ -848,7 +851,6 @@ class Aauth {
 		return $this->aauth_db->update($this->config_vars['users'], $data);
 	}
 
-	//tested
 	/**
 	 * List users
 	 * Return users as an object array
@@ -901,7 +903,6 @@ class Aauth {
 		return $query->result();
 	}
 
-	//tested
 	/**
 	 * Get user
 	 * Get user information
@@ -1275,7 +1276,6 @@ class Aauth {
 	# Group Functions
 	########################
 
-	//tested
 	/**
 	 * Create group
 	 * Creates a new group
@@ -1294,9 +1294,8 @@ class Aauth {
 				'definition'=> $definition
 			);
 			$this->aauth_db->insert($this->config_vars['groups'], $data);
-			$group_id = $this->aauth_db->insert_id();
 			$this->precache_groups();
-			return $group_id;
+			return $this->aauth_db->insert_id();
 		}
 
 		$this->info($this->CI->lang->line('aauth_info_group_exists'));
@@ -1702,9 +1701,8 @@ class Aauth {
 				'definition'=> $definition
 			);
 			$this->aauth_db->insert($this->config_vars['perms'], $data);
-			$perm_id = $this->aauth_db->insert_id();
 			$this->precache_perms();
-			return $perm_id;
+			return $this->aauth_db->insert_id();
 		}
 		$this->info($this->CI->lang->line('aauth_info_perm_exists'));
 		return false;
@@ -2064,7 +2062,6 @@ class Aauth {
 	# Private Message Functions
 	########################
 
-	//tested
 	/**
 	 * Send Private Message
 	 * Send a private message to another user
@@ -2089,9 +2086,9 @@ class Aauth {
 		}
 
 		if ($this->config_vars['pm_encryption']){
-			$this->CI->load->library('encrypt');
-			$title = $this->CI->encrypt->encode($title);
-			$message = $this->CI->encrypt->encode($message);
+			$this->CI->load->library('encryption');
+			$title = $this->CI->encryption->encrypt($title);
+			$message = $this->CI->encryption->encrypt($message);
 		}
 
 		$data = array(
@@ -2116,9 +2113,9 @@ class Aauth {
 	 */
 	public function send_pms( $sender_id, $receiver_ids, $title, $message ){
 		if ($this->config_vars['pm_encryption']){
-			$this->CI->load->library('encrypt');
-			$title = $this->CI->encrypt->encode($title);
-			$message = $this->CI->encrypt->encode($message);
+			$this->CI->load->library('encryption');
+			$title = $this->CI->encryption->encrypt($title);
+			$message = $this->CI->encryption->encrypt($message);
 		}
 		if ($sender_id && ($this->is_banned($sender_id) || !$this->user_exist_by_id($sender_id))){
 			$this->error($this->CI->lang->line('aauth_error_no_user'));
@@ -2181,12 +2178,12 @@ class Aauth {
 		$result = $query->result();
 
 		if ($this->config_vars['pm_encryption']){
-			$this->CI->load->library('encrypt');
+			$this->CI->load->library('encryption');
 
 			foreach ($result as $k => $r)
 			{
-				$result[$k]->title = $this->CI->encrypt->decode($r->title);
-				$result[$k]->message = $this->CI->encrypt->decode($r->message);
+				$result[$k]->title = $this->CI->encryption->decrypt($r->title);
+				$result[$k]->message = $this->CI->encryption->decrypt($r->message);
 			}
 		}
 
@@ -2230,9 +2227,9 @@ class Aauth {
 		}
 
 		if ($this->config_vars['pm_encryption']){
-			$this->CI->load->library('encrypt');
-			$result->title = $this->CI->encrypt->decode($result->title);
-			$result->message = $this->CI->encrypt->decode($result->message);
+			$this->CI->load->library('encryption');
+			$result->title = $this->CI->encryption->decrypt($result->title);
+			$result->message = $this->CI->encryption->decrypt($result->message);
 		}
 
 		return $result;
