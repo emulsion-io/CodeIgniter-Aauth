@@ -2311,7 +2311,6 @@ class Aauth {
 	//tested
 	/**
 	 * Set Private Message as read
-	 * Set private message as read
 	 * @param int $pm_id Private message id to mark as read
 	 */
 	public function set_as_read_pm($pm_id){
@@ -2321,6 +2320,25 @@ class Aauth {
 		);
 
 		$this->aauth_db->update( $this->config_vars['pms'], $data, "id = $pm_id");
+	}
+
+	//tested
+	/**
+	 * Set all Private Messages as read
+	 * @param int|bool $receiver_id User id for message receiver, if FALSE sets for current user
+	 */
+	public function set_as_read_all_pm($receiver_id = false)
+	{
+
+		if (!$receiver_id) {
+			$receiver_id = $this->CI->session->userdata('id');
+		}
+
+		$data = array(
+			'date_read' => date('Y-m-d H:i:s'),
+		);
+
+		$this->aauth_db->update($this->config_vars['pms'], $data, "receiver_id = $receiver_id");
 	}
 
 	########################
