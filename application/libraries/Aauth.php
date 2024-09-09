@@ -23,11 +23,11 @@
  *
  * @todo separate (on some level) the unvalidated users from the "banned" users
  * 
+ * Modified by Fabrice Simonet | emulsion.io
+ * 
  * Updated for CodeIgniter > 3.0.x and PHP > 8.3 
  * change lib encrypt for new lib encryption
  * fix some bugs for php 8.3
- * 
- * @author	Fabrice Simonet | emulsion.io
  * 
  */
 class Aauth {
@@ -2764,109 +2764,6 @@ class Aauth {
 	}
 
 } // end class
-
-// $this->CI->session->userdata('id')
-
-/* coming with v3
-----------------
- * captcha (hmm bi bakalım)
- * parametre olarak array alma
- * stacoverflow
- * public id sini 0 a eşitleyip öyle kontrol yapabilirdik (oni boşver uşağum)
- * lock_user (until parametrsi)
- * unlock_user
- * send_pm() in errounda receiver ve sender için ayrı errorlar olabilür
- * ddos protect olayını daha mantıklı hale getür
- * geçici ban ve e-mail ile tkrar aktifleştime olayı
-*/
-
-/**
- * Coming with v2
- * -------------
- *
- * tmam // permission id yi permission parametre yap
- * mail fonksiyonları imtihanı
- * tamam // login e ip aderesi de eklemek lazım
- * list_users da grup_par verilirse ve adamın birden fazla grubu varsa nolurkun? // bi denemek lazım belki distinct ile düzelir
- * tamam // eğer grup silinmişse kullanıcıları da o gruptan sil (fire)
- * tamam //	 ismember la is admine 2. parametre olarak user id ekle
- * tamam // kepp infos errors die bişey yap ajax requestlerinde silinir errorlar
- * tmam // user variables
- * tamam // sistem variables
- * tmam // user perms
- * tamam gibi // 4mysql index fulltext index??
- * tamam //delete_user dan sonra grup ve perms ler de silinmeli
- * login() içinde login'i doğru şekilde olsa da yine de login attempt artıyo kesin düzeltilecek
- * keep_errors ve keep_infos calismiyor
- *
- *
- *
- * -----------
- * ok
- *
- * unban_user() added // unlock_user
- * remove member added // fire_member
- * allow() changed to allow_group
- * deny() changed to deny_group
- * is member a yeni parametre eklendi
- * allow_user() added
- * deny_user() added
- * keep_infos() added
- * kepp_errors() added
- * get_errors() changed to print_errors()
- * get_infos() changed to print_infos()
- * User and Aauth System Variables.
-set_user_var( $key, $value, $user_id = FALSE )
-get_user_var( $key, $user_id = FALSE)
-unset
-set_system_var( $key, $value, $user_id = FALSE )
-get_system_var( $key, $user_id = FALSE)
-unset
-functions added
- *
- *
- *
- *
- *
- * Done staff v1
- * -----------
- * tamam hacı // control die bi fonksiyon yazıp adam önce login omuşmu sonra da yetkisi var mı die kontrol et. yetkisi yoksa yönlendir ve aktivitiyi güncelle
- * tamam hacı // grupları yetkilendirme, yetki ekleme, alma alow deny
- * tamam gibi // Email and pass validation with form helper
- * biraz oldu // laguage file support
- * tamam // forget pass
- * tamam // yetkilendirme sistemi
- * tamam // Login e remember eklencek
- * tamam // şifremi unuttum ve random string
- * sanırım şimdi tamam // hatalı girişde otomatik süreli kilit
- * ??  tamam heral // mail ile bilgilendirme
- * tamam heral // activasyon emaili
- * tamam gibi // yerine email check // username check
- * tamamlandı // public erişimi
- * tamam // Private messsages
- * tamam össen // errorlar düzenlenecek hepisiiii
- * tamam ama engelleme ve limit olayı koymadım. // pm için okundu ve göster, sil, engelle? die fonksiyonlar eklencek , gönderilen pmler, alınan pmler, arasındaki pmler,
- * tamm// already existedleri info yap onlar error değil hacım
- *
-
-
-
-
-/*
-// if user's email is found
-if ($query->num_rows() > 0) {
-$row = $query->row();
-
-// DDos protection
-if ( $this->config_vars['dos_protection'] and $row->last_login_attempt != '' and
-(strtotime("now") + 30 * $this->config_vars['try'] ) < strtotime($row->last_login_attempt) ) {
-$this->error($this->CI->lang->line('exceeded'));
-return FALSE;
-}
-}
- */
-
-
 
 /* End of file Aauth.php */
 /* Location: ./application/libraries/Aauth.php */
