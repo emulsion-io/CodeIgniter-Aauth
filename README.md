@@ -23,6 +23,21 @@ The default links used by Aauth map to:
 
 Set `totp_active` to `true` to enforce TOTP for users who configured a secret. Set `totp_two_step_login_active` to `true` to use the dedicated second-factor page.
 
+TOTP QR codes are generated locally in the browser with the bundled `qr-creator` 1.0.0 library. No secret is sent to Google Charts or another QR service. Configure the name displayed by authenticator applications with:
+
+```php
+'totp_issuer' => 'Nom du site',
+'totp_label'  => '{issuer} - {email}',
+```
+
+The label supports `{issuer}`, `{site}`, `{email}` and `{username}`. A custom view can obtain the provisioning URI with:
+
+```php
+$uri = $this->aauth->generate_totp_uri($secret, $userId);
+```
+
+The local QR renderer is stored at `assets/js/qr-creator.min.js`; its MIT license is included in `assets/licenses/qr-creator-LICENSE.txt`.
+
 ### Session authentication
 ***
 Aauth relies exclusively on the CodeIgniter session. The former persistent "remember me" cookie has been removed. Configure the session lifetime in CodeIgniter according to the application security policy.

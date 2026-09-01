@@ -2799,10 +2799,39 @@ class Aauth {
 		}
 	}
 
-	public function generate_totp_qrcode($secret){
+	/**
+	 * Generate the TOTP provisioning URI rendered as a QR code by the client.
+	 *
+	 * @param string $secret Base32-encoded TOTP secret
+	 * @param int|bool $user_id User id, or FALSE for the current user
+	 * @return string|bool
+	 */
+	public function generate_totp_uri($secret, $user_id = false){
+		$user = $this->get_user($user_id);
+		if (!$user) {
+			return false;
+		}
+
+		$issuer = isset($this->config_vars['totp_issuer'])
+			? trim((string) $this->config_vars['totp_issuer'])
+			: 'Aauth';
+		$template = isset($this->config_vars['totp_label'])
+			? (string) $this->config_vars['totp_label']
+			: '{issuer} - {email}';
+		$label = trim(strtr($template, array(
+			'{issuer}' => $issuer,
+			'{site}' => $issuer,
+			'{email}' => (string) $user->email,
+			'{username}' => (string) $user->username,
+		)));
+
+		if ($label === '') {
+			$label = $issuer !== '' ? $issuer : (string) $user->email;
+		}
+
 		$this->CI->load->helper('googleauthenticator');
 		$ga = new PHPGangsta_GoogleAuthenticator();
-		return $ga->getQRCodeGoogleUrl($this->config_vars['name'], $secret);
+		return $ga->getOtpAuthUrl($label, $secret, $issuer);
 	}
 
 	public function verify_user_totp_code($totp_code, $user_id = false){

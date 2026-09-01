@@ -30,7 +30,8 @@
 		nav button { min-height:auto; padding:0; background:none; color:var(--accent); font:inherit; }
 		nav a,.text-link { color:var(--accent); text-decoration:none; }
 		.secret { padding:10px 12px; overflow-wrap:anywhere; border:1px dashed #aeb6c2; border-radius:7px; background:#fafbfc; font-family:ui-monospace,monospace; }
-		.qr { display:block; width:200px; height:200px; margin:18px auto; border:1px solid var(--line); }
+		.qr { display:flex; align-items:center; justify-content:center; width:200px; height:200px; margin:18px auto; border:1px solid var(--line); }
+		.qr canvas, .qr svg { display:block; max-width:100%; height:auto; }
 		.password-wrap { position:relative; }
 		.password-wrap input { padding-right:72px; }
 		.password-toggle { position:absolute; top:5px; right:5px; min-height:34px; padding:6px 9px; background:#eef1f5; color:var(--text); font-size:12px; }

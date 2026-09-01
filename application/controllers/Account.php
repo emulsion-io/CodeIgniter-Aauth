@@ -223,7 +223,8 @@ class Account extends CI_Controller
 			'enabled' => !empty($user->totp_secret),
 			'totp_feature_active' => (bool) $this->aauth->config_vars['totp_active'],
 			'secret' => $secret,
-			'qr_code_url' => $this->aauth->generate_totp_qrcode($secret),
+			'totp_uri' => $this->aauth->generate_totp_uri($secret, $user->id),
+			'qr_script_url' => base_url($this->aauth->config_vars['totp_qr_script']),
 		));
 	}
 

@@ -52,6 +52,9 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |   ['totp_reset_over_reset_password']  TOTP reset over reset Password
 |   ['totp_two_step_login']             Enables TOTP two step login 
 |   ['totp_two_step_login_redirect']    Redirect path to TOTP Verification page used by control() & is_allowed()
+|   ['totp_issuer']                     Site/service name sent to authenticator applications
+|   ['totp_label']                      TOTP account label; supports {issuer}, {site}, {email}, {username}
+|   ['totp_qr_script']                  Public path to the locally hosted QR renderer
 |
 |   ['max_login_attempt']               Login attempts time interval (default 10 times in one hour)
 |   ['max_login_attempt_time_period']   Period of time for max login attempts (default "5 minutes")
@@ -127,6 +130,9 @@ $config_aauth["default"] = array(
  'totp_reset_over_reset_password' => false,
  'totp_two_step_login_active'     => false,
  'totp_two_step_login_redirect'   => '/account/twofactor_verification/',
+ 'totp_issuer'                    => 'Aauth',
+ 'totp_label'                     => '{issuer} - {email}',
+ 'totp_qr_script'                 => 'assets/js/qr-creator.min.js',
 
  'max_login_attempt'              => 10,
  'max_login_attempt_time_period'  => "5 minutes",

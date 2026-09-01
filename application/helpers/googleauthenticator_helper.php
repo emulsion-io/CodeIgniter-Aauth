@@ -68,19 +68,27 @@ class PHPGangsta_GoogleAuthenticator
     }
 
     /**
-     * Get QR-Code URL for image, from google charts
+     * Build a standard TOTP provisioning URI for a local QR renderer.
      *
-     * @param string $name
-     * @param string $secret
-     * @param string $title
+     * @param string $label Account label displayed by the authenticator
+     * @param string $secret Base32-encoded TOTP secret
+     * @param string|null $issuer Service or site name
      * @return string
      */
-    public function getQRCodeGoogleUrl($name, $secret, $title = null) {
-        $urlencoded = urlencode('otpauth://totp/'.$name.'?secret='.$secret.'');
-	if(isset($title)) {
-                $urlencoded .= urlencode('&issuer='.urlencode($title));
+    public function getOtpAuthUrl($label, $secret, $issuer = null) {
+        $parameters = array(
+            'secret' => $secret,
+            'algorithm' => 'SHA1',
+            'digits' => $this->_codeLength,
+            'period' => 30,
+        );
+
+        if ($issuer !== null && trim((string) $issuer) !== '') {
+            $parameters['issuer'] = trim((string) $issuer);
         }
-        return 'https://chart.googleapis.com/chart?chs=200x200&chld=M|0&cht=qr&chl='.$urlencoded.'';
+
+        return 'otpauth://totp/' . rawurlencode((string) $label)
+            . '?' . http_build_query($parameters, '', '&', PHP_QUERY_RFC3986);
     }
 
     /**
