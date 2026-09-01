@@ -11,6 +11,18 @@ This version requires PHP 8.2 or newer and is compatible with the [pocketarc Cod
 
 Credits: Simonet Fabrice &lt;fabrice@emulsion.io&gt;
 
+### Minimal authentication demo
+***
+The `Account` controller provides minimal pages for login, password recovery, account verification and TOTP setup. With standard CodeIgniter routing enabled, open `/account/login`.
+
+The default links used by Aauth map to:
+
+* `/account/verification/{user_id}/{code}`
+* `/account/reset_password/{code}`
+* `/account/twofactor_verification`
+
+Set `totp_active` to `true` to enforce TOTP for users who configured a secret. Set `totp_two_step_login_active` to `true` to use the dedicated second-factor page.
+
 **This is Quick Start page. You can also take a look at the [detailed Documentation Wiki](https://github.com/magefly/CodeIgniter-Aauth/wiki) to learn about other great Features**
 
 ### Features 

@@ -231,63 +231,6 @@ class Aauth {
 			$this->error($this->CI->lang->line('aauth_error_no_user'));
 			return false;
 		}
-		if($this->config_vars['totp_active'] == true AND $this->config_vars['totp_only_on_ip_change'] == false AND $this->config_vars['totp_two_step_login_active'] == true){
-			if($this->config_vars['totp_two_step_login_active'] == true){
-				$this->CI->session->set_userdata('totp_required', true);
-			}
-
-			$query = null;
-			$query = $this->aauth_db->where($db_identifier, $identifier);
-			$query = $this->aauth_db->get($this->config_vars['users']);
-			$totp_secret =  $query->row()->totp_secret;
-			if ($query->num_rows() > 0 AND !$totp_code) {
-				$this->error($this->CI->lang->line('aauth_error_totp_code_required'));
-				return false;
-			}else {
-				if(!empty($totp_secret)){
-					$this->CI->load->helper('googleauthenticator');
-					$ga = new PHPGangsta_GoogleAuthenticator();
-					$checkResult = $ga->verifyCode($totp_secret, $totp_code, 0);
-					if (!$checkResult) {
-						$this->error($this->CI->lang->line('aauth_error_totp_code_invalid'));
-						return false;
-					}
-				}
-			}
-	 	}
-
-	 	if($this->config_vars['totp_active'] == true AND $this->config_vars['totp_only_on_ip_change'] == true){
-			$query = null;
-			$query = $this->aauth_db->where($db_identifier, $identifier);
-			$query = $this->aauth_db->get($this->config_vars['users']);
-			$totp_secret =  $query->row()->totp_secret;
-			$ip_address = $query->row()->ip_address;
-			$current_ip_address = $this->CI->input->ip_address();
-
-			if ($query->num_rows() > 0 AND !$totp_code) {
-				if($ip_address != $current_ip_address ){
-					if($this->config_vars['totp_two_step_login_active'] == false){
-						$this->error($this->CI->lang->line('aauth_error_totp_code_required'));
-						return false;
-					} else if($this->config_vars['totp_two_step_login_active'] == true){
-						$this->CI->session->set_userdata('totp_required', true);
-					}
-				}
-			}else {
-				if(!empty($totp_secret)){
-					if($ip_address != $current_ip_address ){
-						$this->CI->load->helper('googleauthenticator');
-						$ga = new PHPGangsta_GoogleAuthenticator();
-						$checkResult = $ga->verifyCode($totp_secret, $totp_code, 0);
-						if (!$checkResult) {
-							$this->error($this->CI->lang->line('aauth_error_totp_code_invalid'));
-							return false;
-						}
-					}
-				}
-			}
-	 	}
-
 		$query = null;
 		$query = $this->aauth_db->where($db_identifier, $identifier);
 		$query = $this->aauth_db->where('banned', 0);
@@ -301,51 +244,91 @@ class Aauth {
 
 		$row = $query->row();
 
-		// if identifier and password match and the account is not banned
-		if ($this->verify_password($pass, $row->pass, $row->id)) {
-
-			// If email and pass matches
-			// create session
-			$data = array(
-				'id' => $row->id,
-				'username' => $row->username,
-				'email' => $row->email,
-				'loggedin' => true
-			);
-
-			$this->CI->session->set_userdata($data);
-
-			if ( $remember ){
-				$expire = $this->config_vars['remember'];
-				$today = date("Y-m-d");
-				$remember_date = date("Y-m-d", strtotime($today . $expire) );
-				$random_string = bin2hex(random_bytes(32));
-				$this->update_remember($row->id, $random_string, $remember_date );
-				$cookie = array(
-					'name'	 => 'user',
-					'value'	 => $row->id . "-" . $random_string,
-					'expire' => max(0, strtotime($remember_date) - time()),
-					'path'	 => '/',
-				);
-				$this->CI->input->set_cookie($cookie);
-			}
-
-			// update last login
-			$this->update_last_login($row->id);
-			$this->update_activity();
-
-			if($this->config_vars['remove_successful_attempts'] == true){
-				$this->reset_login_attempts();
-			}
-
-			return true;
-		}
-		// if not matches
-		else {
-
+		if (!$this->verify_password($pass, $row->pass, $row->id)) {
 			$this->error($this->CI->lang->line('aauth_error_login_failed_all'));
 			return false;
 		}
+
+		if ($this->user_requires_totp($row)) {
+			if (empty($totp_code)) {
+				$this->error($this->CI->lang->line('aauth_error_totp_code_required'));
+
+				if ($this->config_vars['totp_two_step_login_active']) {
+					$this->CI->session->set_userdata(array(
+						'totp_required' => true,
+						'totp_user_id' => $row->id,
+						'totp_remember' => (bool) $remember,
+					));
+				}
+
+				return false;
+			}
+
+			if (!$this->verify_totp_code($row->totp_secret, $totp_code)) {
+				$this->error($this->CI->lang->line('aauth_error_totp_code_invalid'));
+				return false;
+			}
+		}
+
+		return $this->complete_login($row, $remember);
+	}
+
+	/**
+	 * Determine whether a user must provide a TOTP code for this login.
+	 */
+	private function user_requires_totp($user) {
+		if (!$this->config_vars['totp_active'] || empty($user->totp_secret)) {
+			return false;
+		}
+
+		return !$this->config_vars['totp_only_on_ip_change']
+			|| $user->ip_address !== $this->CI->input->ip_address();
+	}
+
+	/**
+	 * Verify a TOTP code against a secret.
+	 */
+	private function verify_totp_code($secret, $totp_code) {
+		$this->CI->load->helper('googleauthenticator');
+		$ga = new PHPGangsta_GoogleAuthenticator();
+		return $ga->verifyCode($secret, (string) $totp_code, 1);
+	}
+
+	/**
+	 * Create the authenticated session and optional remember-me cookie.
+	 */
+	private function complete_login($user, $remember = false) {
+		$this->CI->session->sess_regenerate(true);
+		$this->CI->session->set_userdata(array(
+			'id' => $user->id,
+			'username' => $user->username,
+			'email' => $user->email,
+			'loggedin' => true,
+		));
+
+		$this->CI->session->unset_userdata(array('totp_required', 'totp_user_id', 'totp_remember'));
+
+		if ($remember) {
+			$expire = $this->config_vars['remember'];
+			$remember_date = date('Y-m-d', strtotime(date('Y-m-d') . $expire));
+			$random_string = bin2hex(random_bytes(32));
+			$this->update_remember($user->id, $random_string, $remember_date);
+			$this->CI->input->set_cookie(array(
+				'name' => 'user',
+				'value' => $user->id . '-' . $random_string,
+				'expire' => max(0, strtotime($remember_date) - time()),
+				'path' => '/',
+			));
+		}
+
+		$this->update_last_login($user->id);
+		$this->update_activity($user->id);
+
+		if ($this->config_vars['remove_successful_attempts']) {
+			$this->reset_login_attempts();
+		}
+
+		return true;
 	}
 
 	/**
@@ -2714,14 +2697,12 @@ class Aauth {
 	public function generate_unique_totp_secret(){
 		$this->CI->load->helper('googleauthenticator');
 		$ga = new PHPGangsta_GoogleAuthenticator();
-		$stop = false;
-		while (!$stop) {
+		while (true) {
 			$secret = $ga->createSecret();
 			$query = $this->aauth_db->where('totp_secret', $secret);
 			$query = $this->aauth_db->get($this->config_vars['users']);
 			if ($query->num_rows() == 0) {
 				return $secret;
-				$stop = true;
 			}
 		}
 	}
@@ -2736,7 +2717,11 @@ class Aauth {
 		if ( !$this->is_totp_required()) {
 			return true;
 		}
-		if ($user_id == false) {
+
+		$pending_user_id = $this->CI->session->userdata('totp_user_id');
+		if ($pending_user_id) {
+			$user_id = $pending_user_id;
+		} elseif ($user_id == false) {
 			$user_id = $this->CI->session->userdata('id');
 		}
 		if (empty($totp_code)) {
@@ -2749,17 +2734,17 @@ class Aauth {
 			$this->error($this->CI->lang->line('aauth_error_no_user'));
 			return false;
 		}
-		$totp_secret =  $query->row()->totp_secret;
-		$this->CI->load->helper('googleauthenticator');
-		$ga = new PHPGangsta_GoogleAuthenticator();
-		$checkResult = $ga->verifyCode($totp_secret, $totp_code, 0);
-		if (!$checkResult) {
+		$user = $query->row();
+		if (!$this->verify_totp_code($user->totp_secret, $totp_code)) {
 			$this->error($this->CI->lang->line('aauth_error_totp_code_invalid'));
+			if ($this->config_vars['ddos_protection'] && !$this->update_login_attempts()) {
+				$this->error($this->CI->lang->line('aauth_error_login_attempts_exceeded'));
+			}
 			return false;
-		}else{
-			$this->CI->session->unset_userdata('totp_required');
-			return true;
 		}
+
+		$remember = (bool) $this->CI->session->userdata('totp_remember');
+		return $this->complete_login($user, $remember);
 	}
 
 	public function is_totp_required(){
