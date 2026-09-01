@@ -24,7 +24,6 @@
  * The latest version of Aauth can be obtained from:
  * https://github.com/emreakay/CodeIgniter-Aauth
  *
- * @todo separate (on some level) the unvalidated users from the "banned" users
  */
 class Aauth {
 
@@ -281,11 +280,10 @@ class Aauth {
 			$db_identifier = 'email';
  		}
 
-		// if user is not verified
+		// An unverified email is an account state of its own, not a ban.
 		$query = null;
 		$query = $this->aauth_db->where($db_identifier, $identifier);
-		$query = $this->aauth_db->where('banned', 1);
-		$query = $this->aauth_db->where('verification_code !=', '');
+		$query = $this->aauth_db->where('email_verified_at', null);
 		$query = $this->aauth_db->get($this->config_vars['users']);
 
 		if ($query->num_rows() > 0) {
@@ -303,7 +301,8 @@ class Aauth {
 		}
 		$query = null;
 		$query = $this->aauth_db->where($db_identifier, $identifier);
-		$query = $this->aauth_db->where('banned', 0);
+		$query = $this->aauth_db->where('email_verified_at IS NOT NULL', null, false);
+		$query = $this->aauth_db->where('banned_at', null);
 
 		$query = $this->aauth_db->get($this->config_vars['users']);
 
@@ -479,7 +478,8 @@ class Aauth {
 		$email = trim($email);
 
 		$query = $this->aauth_db->where('email', $email);
-		$query = $this->aauth_db->where('banned', 0);
+		$query = $this->aauth_db->where('email_verified_at IS NOT NULL', null, false);
+		$query = $this->aauth_db->where('banned_at', null);
 		$query = $this->aauth_db->get($this->config_vars['users']);
 
 		if ($query->num_rows() < 1) {
@@ -597,7 +597,8 @@ class Aauth {
 
 		$this->aauth_db->where('verification_code', 'reset:' . hash('sha256', $token));
 		$this->aauth_db->where('forgot_exp >=', date('Y-m-d H:i:s'));
-		$this->aauth_db->where('banned', 0);
+		$this->aauth_db->where('email_verified_at IS NOT NULL', null, false);
+		$this->aauth_db->where('banned_at', null);
 		$query = $this->aauth_db->get($this->config_vars['users']);
 
 		return $query->num_rows() > 0 ? $query->row() : false;
@@ -730,11 +731,13 @@ class Aauth {
 			return false;
 		}
 
+		$requires_verification = $this->config_vars['verification'] && !$this->is_admin();
 		$data = array(
 			'email' => $email,
 			'pass' => $this->hash_password($pass, 0), // Password cannot be blank but user_id required for salt, setting bad password for now
 			'username' => (!$username) ? '' : $username ,
 			'date_created' => date("Y-m-d H:i:s"),
+			'email_verified_at' => $requires_verification ? null : date("Y-m-d H:i:s"),
 		);
 
 		if ( $this->aauth_db->insert($this->config_vars['users'], $data )){
@@ -744,15 +747,8 @@ class Aauth {
 			// set default group
 			$this->add_member($user_id, $this->config_vars['default_group']);
 
-			// if verification activated
-			if($this->config_vars['verification'] && !$this->is_admin()){
-				$data = null;
-				$data['banned'] = 1;
-
-				$this->aauth_db->where('id', $user_id);
-				$this->aauth_db->update($this->config_vars['users'], $data);
-
-				// sends verifition ( !! e-mail settings must be set)
+			// Send verification without treating the new user as banned.
+			if($requires_verification){
 				$this->send_verification($user_id);
 			}
 
@@ -804,6 +800,11 @@ class Aauth {
 				$valid = false;
 			}
 			$data['email'] = $email;
+			if ($this->config_vars['verification']) {
+				$data['email_verified_at'] = null;
+				$data['verification_code'] = '';
+				$data['verification_exp'] = null;
+			}
 		}
 
 		if ($pass != false) {
@@ -835,7 +836,12 @@ class Aauth {
 		}
 
 		$this->aauth_db->where('id', $user_id);
-		return $this->aauth_db->update($this->config_vars['users'], $data);
+		$updated = $this->aauth_db->update($this->config_vars['users'], $data);
+		if ($updated && $email !== false && $this->config_vars['verification']) {
+			$this->send_verification($user_id);
+		}
+
+		return $updated;
 	}
 
 	/**
@@ -866,9 +872,9 @@ class Aauth {
 				->from($this->config_vars['users']);
 		}
 
-		// banneds
+		// Banned users
 		if (!$include_banneds) {
-			$this->aauth_db->where('banned != ', 1);
+			$this->aauth_db->where('banned_at', null);
 		}
 
 		// order_by
@@ -929,11 +935,11 @@ class Aauth {
 		$data = array(
 			'verification_code' => '',
 			'verification_exp' => null,
-			'banned' => 0,
+			'email_verified_at' => date('Y-m-d H:i:s'),
 		);
 
 		$this->aauth_db->where('id', (int) $user_id);
-		$this->aauth_db->where('banned', 1);
+		$this->aauth_db->where('email_verified_at', null);
 		$this->aauth_db->where('verification_code', $token_hash);
 		$this->aauth_db->where('verification_exp >=', date('Y-m-d H:i:s'));
 		if (!$this->aauth_db->update($this->config_vars['users'], $data)) {
@@ -955,7 +961,7 @@ class Aauth {
 		}
 
 		$query = $this->aauth_db->where('id', (int) $user_id);
-		$query = $this->aauth_db->where('banned', 1);
+		$query = $this->aauth_db->where('email_verified_at', null);
 		$query = $this->aauth_db->get($this->config_vars['users']);
 		if ($query->num_rows() < 1) {
 			return false;
@@ -994,7 +1000,7 @@ class Aauth {
 	 */
 	public function send_verification($user_id){
 		$query = $this->aauth_db->where('id', $user_id);
-		$query = $this->aauth_db->where('banned', 1);
+		$query = $this->aauth_db->where('email_verified_at', null);
 		$query = $this->aauth_db->get($this->config_vars['users']);
 		if ($query->num_rows() < 1) {
 			return false;
@@ -1058,14 +1064,18 @@ class Aauth {
 	 * Ban user
 	 * Bans a user account
 	 * @param int $user_id User id to ban
+	 * @param string|null $reason Optional administrative reason
 	 * @return bool Ban fails/succeeds
 	 */
-	public function ban_user($user_id) {
+	public function ban_user($user_id, $reason = null) {
+		if ($reason !== null && !is_string($reason)) {
+			return false;
+		}
+		$reason = $reason === null ? null : trim($reason);
 
 		$data = array(
-			'banned' => 1,
-			'verification_code' => '',
-			'verification_exp' => null,
+			'banned_at' => date('Y-m-d H:i:s'),
+			'ban_reason' => $reason === '' ? null : $reason,
 		);
 
 		$this->aauth_db->where('id', $user_id);
@@ -1083,7 +1093,8 @@ class Aauth {
 	public function unban_user($user_id) {
 
 		$data = array(
-			'banned' => 0
+			'banned_at' => null,
+			'ban_reason' => null,
 		);
 
 		$this->aauth_db->where('id', $user_id);
@@ -1095,7 +1106,7 @@ class Aauth {
 	 * Check user banned
 	 * Checks if a user is banned
 	 * @param int $user_id User id to check
-	 * @return bool False if banned, True if not
+	 * @return bool TRUE if banned, FALSE otherwise
 	 */
 	public function is_banned($user_id) {
 
@@ -1104,7 +1115,7 @@ class Aauth {
 		}
 
 		$query = $this->aauth_db->where('id', $user_id);
-		$query = $this->aauth_db->where('banned', 1);
+		$query = $this->aauth_db->where('banned_at IS NOT NULL', null, false);
 
 		$query = $this->aauth_db->get($this->config_vars['users']);
 

@@ -311,8 +311,18 @@ $this->aauth->send_pm(3,4,'New cloaks','These new cloaks are fantastic!')
 
 Frodo has broke the rules and will now need to be banned from the system.
 ```php
-$this->aauth->ban_user(3);
+$this->aauth->ban_user(3, 'Repeated abuse');
 ``` 
+
+Email verification and banning are independent account states in v3:
+
+- `email_verified_at` is `NULL` until the address is verified;
+- `banned_at` records when access was suspended;
+- `ban_reason` can store an optional administrative reason.
+
+For an existing v3 installation, run `sql/Aauth_v3_account_states.sql` once. The
+migration distinguishes legacy accounts awaiting verification from genuinely
+banned accounts before removing the old `banned` flag.
 
 You have reached the end of the Quick Start Guide, but please take a look at the [detailed Documentation Wiki](https://github.com/magefly/CodeIgniter-Aauth/wiki/_pages) for additional information.
 

@@ -96,10 +96,12 @@ CREATE TABLE `aauth_users` (
   `email` varchar(100) COLLATE utf8_general_ci NOT NULL,
   `pass` varchar(255) COLLATE utf8_general_ci NOT NULL,
   `username` varchar(100) COLLATE utf8_general_ci,
-  `banned` tinyint(1) DEFAULT '0',
   `last_login` datetime DEFAULT NULL,
   `last_activity` datetime DEFAULT NULL,
   `date_created` datetime DEFAULT NULL,
+  `email_verified_at` datetime DEFAULT NULL,
+  `banned_at` datetime DEFAULT NULL,
+  `ban_reason` text COLLATE utf8_general_ci,
   `forgot_exp` datetime DEFAULT NULL,
   `verification_code` text COLLATE utf8_general_ci,
   `verification_exp` datetime DEFAULT NULL,
@@ -111,8 +113,8 @@ CREATE TABLE `aauth_users` (
 -- ----------------------------
 -- Records of aauth_users
 -- ----------------------------
-INSERT INTO `aauth_users` (`id`, `email`, `pass`, `username`, `banned`, `ip_address`) VALUES
-('1', 'admin@example.com', '$2y$10$h19Lblcr6amOIUL1TgYW2.VVZOhac/e1kHMgAwCubMTlYXZrL0wS2', 'Admin', '0', '0');
+INSERT INTO `aauth_users` (`id`, `email`, `pass`, `username`, `email_verified_at`, `ip_address`) VALUES
+('1', 'admin@example.com', '$2y$10$h19Lblcr6amOIUL1TgYW2.VVZOhac/e1kHMgAwCubMTlYXZrL0wS2', 'Admin', NOW(), '0');
 
 -- ----------------------------
 -- Table structure for `aauth_user_to_group`
