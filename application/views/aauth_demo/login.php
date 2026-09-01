@@ -16,7 +16,6 @@
 		<input id="totp_code" name="totp_code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" data-totp>
 	<?php endif; ?>
 
-	<label class="check"><input name="remember" type="checkbox" value="1"> Rester connecté</label>
 	<?= $captcha ?>
 
 	<div class="actions">

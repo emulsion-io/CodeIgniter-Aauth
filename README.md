@@ -23,6 +23,18 @@ The default links used by Aauth map to:
 
 Set `totp_active` to `true` to enforce TOTP for users who configured a secret. Set `totp_two_step_login_active` to `true` to use the dedicated second-factor page.
 
+### Session authentication
+***
+Aauth relies exclusively on the CodeIgniter session. The former persistent "remember me" cookie has been removed. Configure the session lifetime in CodeIgniter according to the application security policy.
+
+The login signature is now:
+
+```php
+$this->aauth->login($identifier, $password, $totpCode);
+```
+
+For an existing database, run `sql/Aauth_v3_remove_remember_me.sql` once to remove the unused `remember_time` and `remember_exp` columns. New installations using `sql/Aauth_v3.sql` do not contain them.
+
 ### Temporary password reset links
 ***
 `remind_password($email)` still emails a reset link for backward compatibility. To create the same temporary link without sending an email, use:

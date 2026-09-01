@@ -101,8 +101,6 @@ CREATE TABLE `aauth_users` (
   `last_activity` datetime DEFAULT NULL,
   `date_created` datetime DEFAULT NULL,
   `forgot_exp` datetime DEFAULT NULL,
-  `remember_time` datetime DEFAULT NULL,
-  `remember_exp` text COLLATE utf8_general_ci,
   `verification_code` text COLLATE utf8_general_ci,
   `totp_secret` varchar(16) COLLATE utf8_general_ci DEFAULT NULL,
   `ip_address` text COLLATE utf8_general_ci,
@@ -112,7 +110,8 @@ CREATE TABLE `aauth_users` (
 -- ----------------------------
 -- Records of aauth_users
 -- ----------------------------
-INSERT INTO `aauth_users` VALUES ('1', 'admin@example.com', '$2y$10$h19Lblcr6amOIUL1TgYW2.VVZOhac/e1kHMgAwCubMTlYXZrL0wS2', 'Admin', '0', null, null, null, null, null, null, null, null, '0');
+INSERT INTO `aauth_users` (`id`, `email`, `pass`, `username`, `banned`, `ip_address`) VALUES
+('1', 'admin@example.com', '$2y$10$h19Lblcr6amOIUL1TgYW2.VVZOhac/e1kHMgAwCubMTlYXZrL0wS2', 'Admin', '0', '0');
 
 -- ----------------------------
 -- Table structure for `aauth_user_to_group`

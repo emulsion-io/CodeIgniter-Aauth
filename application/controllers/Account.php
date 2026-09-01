@@ -44,10 +44,9 @@ class Account extends CI_Controller
 		if ($this->is_post()) {
 			$identifier = trim((string) $this->input->post('identifier', false));
 			$password = $this->input->post('password', false);
-			$remember = (bool) $this->input->post('remember');
 			$totp_code = trim((string) $this->input->post('totp_code', false));
 
-			if ($this->aauth->login($identifier, $password, $remember, $totp_code ?: null)) {
+			if ($this->aauth->login($identifier, $password, $totp_code ?: null)) {
 				$this->notice('Connexion réussie.');
 				redirect('account');
 				return;
@@ -170,7 +169,7 @@ class Account extends CI_Controller
 	public function cancel_twofactor()
 	{
 		if ($this->is_post()) {
-			$this->session->unset_userdata(array('totp_required', 'totp_user_id', 'totp_remember'));
+			$this->session->unset_userdata(array('totp_required', 'totp_user_id'));
 		}
 
 		redirect('account/login');

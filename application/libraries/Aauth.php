@@ -249,21 +249,12 @@ class Aauth {
 	/**
 	 * Login user
 	 * Check provided details against the database. Add items to error array on fail, create session if success
-	 * @param string $email
+	 * @param string $identifier
 	 * @param string $pass
-	 * @param bool $remember
+	 * @param string|null $totp_code
 	 * @return bool Indicates successful login.
 	 */
-	public function login($identifier, $pass, $remember = false, $totp_code = null) {
-
-		// Remove cookies first
-		$cookie = array(
-			'name'	 => 'user',
-			'value'	 => '',
-			'expire' => -3600,
-			'path'	 => '/',
-		);
-		$this->CI->input->set_cookie($cookie);
+	public function login($identifier, $pass, $totp_code = null) {
 		if (!$this->verify_captcha_response()) {
 			return false;
 		}
@@ -302,7 +293,7 @@ class Aauth {
 			return false;
 		}
 
-		// to find user id, create sessions and cookies
+		// Find the user and create the authenticated session.
 		$query = $this->aauth_db->where($db_identifier, $identifier);
 		$query = $this->aauth_db->get($this->config_vars['users']);
 
@@ -336,7 +327,6 @@ class Aauth {
 					$this->CI->session->set_userdata(array(
 						'totp_required' => true,
 						'totp_user_id' => $row->id,
-						'totp_remember' => (bool) $remember,
 					));
 				}
 
@@ -349,7 +339,7 @@ class Aauth {
 			}
 		}
 
-		return $this->complete_login($row, $remember);
+		return $this->complete_login($row);
 	}
 
 	/**
@@ -374,9 +364,9 @@ class Aauth {
 	}
 
 	/**
-	 * Create the authenticated session and optional remember-me cookie.
+	 * Create the authenticated session.
 	 */
-	private function complete_login($user, $remember = false) {
+	private function complete_login($user) {
 		$this->CI->session->sess_regenerate(true);
 		$this->CI->session->set_userdata(array(
 			'id' => $user->id,
@@ -385,20 +375,7 @@ class Aauth {
 			'loggedin' => true,
 		));
 
-		$this->CI->session->unset_userdata(array('totp_required', 'totp_user_id', 'totp_remember'));
-
-		if ($remember) {
-			$expire = $this->config_vars['remember'];
-			$remember_date = date('Y-m-d', strtotime(date('Y-m-d') . $expire));
-			$random_string = bin2hex(random_bytes(32));
-			$this->update_remember($user->id, $random_string, $remember_date);
-			$this->CI->input->set_cookie(array(
-				'name' => 'user',
-				'value' => $user->id . '-' . $random_string,
-				'expire' => max(0, strtotime($remember_date) - time()),
-				'path' => '/',
-			));
-		}
+		$this->CI->session->unset_userdata(array('totp_required', 'totp_user_id'));
 
 		$this->update_last_login($user->id);
 		$this->update_activity($user->id);
@@ -412,47 +389,11 @@ class Aauth {
 
 	/**
 	 * Check user login
-	 * Checks if user logged in, also checks remember.
+	 * Checks if the CodeIgniter session is authenticated.
 	 * @return bool
 	 */
 	public function is_loggedin() {
-
-		if ( $this->CI->session->userdata('loggedin') ){
-			return true;
-		} else {
-			$cookie_value = $this->CI->input->cookie('user', true);
-			if (!$cookie_value){
-				return false;
-			} else {
-				$cookie = explode('-', $cookie_value, 2);
-				if (count($cookie) !== 2 || !ctype_digit($cookie[0]) || strlen($cookie[1]) < 13) {
-					return false;
-				}
-				else{
-					$query = $this->aauth_db->where('id', $cookie[0]);
-					$query = $this->aauth_db->where('remember_exp', $cookie[1]);
-					$query = $this->aauth_db->get($this->config_vars['users']);
-
-					$row = $query->row();
-
-					if ($query->num_rows() < 1) {
-						$this->update_remember($cookie[0]);
-						return false;
-					}else{
-
-						if(strtotime($row->remember_time) > strtotime("now") ){
-							$this->login_fast($cookie[0]);
-							return true;
-						}
-						// if time is expired
-						else {
-							return false;
-						}
-					}
-				}
-			}
-		}
-		return false;
+		return (bool) $this->CI->session->userdata('loggedin');
 	}
 
 	/**
@@ -502,51 +443,11 @@ class Aauth {
 
 	/**
 	 * Logout user
-	 * Destroys the CodeIgniter session and remove cookies to log out user.
+	 * Destroys the CodeIgniter session.
 	 * @return bool If session destroy successful
 	 */
 	public function logout() {
-
-		$cookie = array(
-			'name'	 => 'user',
-			'value'	 => '',
-			'expire' => -3600,
-			'path'	 => '/',
-		);
-		$this->CI->input->set_cookie($cookie);
-
 		return $this->CI->session->sess_destroy();
-	}
-
-	/**
-	 * Fast login
-	 * Login with just a user id
-	 * @param int $user_id User id to log in
-	 * @return bool TRUE if login successful.
-	 */
-	public function login_fast($user_id){
-
-		$query = $this->aauth_db->where('id', $user_id);
-		$query = $this->aauth_db->where('banned', 0);
-		$query = $this->aauth_db->get($this->config_vars['users']);
-
-		$row = $query->row();
-
-		if ($query->num_rows() > 0) {
-
-			// if id matches
-			// create session
-			$data = array(
-				'id' => $row->id,
-				'username' => $row->username,
-				'email' => $row->email,
-				'loggedin' => true
-			);
-
-			$this->CI->session->set_userdata($data);
-			return true;
-		}
-		return false;
 	}
 
 	/**
@@ -668,8 +569,6 @@ class Aauth {
 		$data = array(
 			'verification_code' => '',
 			'forgot_exp' => null,
-			'remember_time' => null,
-			'remember_exp' => null,
 			'pass' => $this->hash_password($password, $row->id),
 		);
 
@@ -782,24 +681,6 @@ class Aauth {
 
 		return 0;
 	}
-
-	/**
-	 * Update remember
-	 * Update amount of time a user is remembered for
-	 * @param int $user_id User id to update
-	 * @param int $expression
-	 * @param int $expire
-	 * @return bool Update fails/succeeds
-	 */
-	public function update_remember($user_id, $expression=null, $expire=null) {
-
-		$data['remember_time'] = $expire;
-		$data['remember_exp'] = $expression;
-
-		$query = $this->aauth_db->where('id',$user_id);
-		return $this->aauth_db->update($this->config_vars['users'], $data);
-	}
-
 
 	########################
 	# User Functions
@@ -2954,8 +2835,7 @@ class Aauth {
 			return false;
 		}
 
-		$remember = (bool) $this->CI->session->userdata('totp_remember');
-		return $this->complete_login($user, $remember);
+		return $this->complete_login($user);
 	}
 
 	public function is_totp_required(){

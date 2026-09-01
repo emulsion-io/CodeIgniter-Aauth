@@ -29,10 +29,6 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |   ['user_variables']                  The table which contains users variables
 |   ['login_attempts']                  The table which contains login attempts
 |
-|   ['remember']                        Remember time (in relative format) elapsed after connecting and automatic LogOut for usage with Cookies
-|                                       Relative Format (e.g. '+ 1 week', '+ 1 month', '+ first day of next month') 
-|                                       for details see http://php.net/manual/de/datetime.formats.relative.php
-|
 |   ['max']                             Maximum char long for Password
 |   ['min']                             Minimum char long for Password
 |
@@ -107,8 +103,6 @@ $config_aauth["default"] = array(
  'pms'                            => 'aauth_pms',
  'user_variables'                 => 'aauth_user_variables',
  'login_attempts'                 => 'aauth_login_attempts',
-
- 'remember'                       => ' +3 days',
 
  'max'                            => 50,
  'min'                            => 10,
