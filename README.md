@@ -23,6 +23,35 @@ The default links used by Aauth map to:
 
 Set `totp_active` to `true` to enforce TOTP for users who configured a secret. Set `totp_two_step_login_active` to `true` to use the dedicated second-factor page.
 
+### CAPTCHA providers
+***
+Aauth can use either Google reCAPTCHA or a self-hosted [Cap](https://trycap.dev/guide/) instance. Only one provider can be selected at a time.
+
+For Cap:
+
+```php
+'captcha_provider'      => 'cap',
+'recaptcha_active'      => false,
+'cap_instance_url'      => 'https://cap.example.com',
+'cap_site_key'          => 'your-site-key',
+'cap_secret'            => 'your-site-secret',
+'cap_widget_script_url' => 'https://cdn.jsdelivr.net/npm/cap-widget@0.1.56',
+'cap_widget_mode'       => 'checkbox', // 'checkbox' or 'invisible'
+```
+
+The `invisible` mode starts the Cap challenge when the surrounding form is submitted, adds the resulting `cap-token`, then resumes submission. It displays no checkbox. Keep `checkbox` if you want the visitor to start the challenge explicitly.
+
+For reCAPTCHA:
+
+```php
+'captcha_provider' => 'recaptcha',
+'recaptcha_active' => false,
+'recaptcha_siteKey' => 'your-site-key',
+'recaptcha_secret' => 'your-site-secret',
+```
+
+The legacy `recaptcha_active` option remains supported when `captcha_provider` is `false`. Selecting Cap while that legacy option is enabled raises a configuration error instead of enabling both providers.
+
 **This is Quick Start page. You can also take a look at the [detailed Documentation Wiki](https://github.com/magefly/CodeIgniter-Aauth/wiki) to learn about other great Features**
 
 ### Features 

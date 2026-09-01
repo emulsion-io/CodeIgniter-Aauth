@@ -65,7 +65,7 @@ class Account extends CI_Controller
 			'identifier_label' => $this->aauth->config_vars['login_with_name'] ? "Nom d'utilisateur" : 'Adresse e-mail',
 			'identifier_type' => $this->aauth->config_vars['login_with_name'] ? 'text' : 'email',
 			'show_totp' => (bool) $this->aauth->config_vars['totp_active'],
-			'recaptcha' => $this->aauth->generate_recaptcha_field(),
+			'captcha' => $this->aauth->generate_captcha_field(),
 		));
 	}
 

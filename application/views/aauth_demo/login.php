@@ -17,7 +17,7 @@
 	<?php endif; ?>
 
 	<label class="check"><input name="remember" type="checkbox" value="1"> Rester connecté</label>
-	<?= $recaptcha ?>
+	<?= $captcha ?>
 
 	<div class="actions">
 		<button type="submit">Se connecter</button>

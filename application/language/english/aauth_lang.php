@@ -39,6 +39,7 @@ $lang['aauth_error_login_failed_name']       = 'Username and Password do not mat
 $lang['aauth_error_login_failed_all']        = 'Email, Username or Password do not match.';
 $lang['aauth_error_login_attempts_exceeded'] = 'You have exceeded your login attempts, your account has now been locked.';
 $lang['aauth_error_recaptcha_not_correct']   = 'Sorry, the reCAPTCHA text entered was incorrect.';
+$lang['aauth_error_captcha_not_correct']     = 'The CAPTCHA verification failed.';
 
 // Misc. errors
 $lang['aauth_error_no_user']              = 'User does not exist';

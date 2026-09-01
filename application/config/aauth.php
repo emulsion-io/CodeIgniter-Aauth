@@ -40,10 +40,16 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |
 |   ['ddos_protection']                 Enables the DDoS Protection, user will be banned temporary when he exceed the login 'try'
 |
-|   ['recaptcha_active']                Enables reCAPTCHA (for details see www.google.com/recaptcha/admin)
-|   ['recaptcha_login_attempts']        Login Attempts to display reCAPTCHA
+|   ['captcha_provider']                Active CAPTCHA provider: FALSE, 'recaptcha' or 'cap'
+|   ['recaptcha_active']                Legacy reCAPTCHA toggle. Keep FALSE when captcha_provider is used
+|   ['recaptcha_login_attempts']        Login attempts before displaying the selected CAPTCHA provider
 |   ['recaptcha_siteKey']               The reCAPTCHA siteKey
 |   ['recaptcha_secret']                The reCAPTCHA secretKey
+|   ['cap_instance_url']                Public URL of the self-hosted Cap instance
+|   ['cap_site_key']                    Site key created in the Cap dashboard
+|   ['cap_secret']                      Site secret created in the Cap dashboard
+|   ['cap_widget_script_url']           Cap widget script URL; it can point to a self-hosted asset
+|   ['cap_widget_mode']                 Cap display mode: 'checkbox' or 'invisible'
 |
 |   ['totp_active']                     Enables the Time-based One-time Password Algorithm
 |   ['totp_only_on_ip_change']          TOTP only on IP Change
@@ -110,10 +116,16 @@ $config_aauth["default"] = array(
 
  'ddos_protection'                => true,
 
+ 'captcha_provider'               => false,
  'recaptcha_active'               => false,
  'recaptcha_login_attempts'       => 4,
  'recaptcha_siteKey'              => '',
  'recaptcha_secret'               => '',
+ 'cap_instance_url'               => '',
+ 'cap_site_key'                   => '',
+ 'cap_secret'                     => '',
+ 'cap_widget_script_url'          => 'https://cdn.jsdelivr.net/npm/cap-widget@0.1.56',
+ 'cap_widget_mode'                => 'checkbox',
 
  'totp_active'                    => false,
  'totp_only_on_ip_change'         => false,

@@ -95,6 +95,12 @@ class Aauth {
 	 */
 	 private $cache_group_id;
 
+	/**
+	 * Active CAPTCHA provider: recaptcha, cap or FALSE.
+	 * @var string|bool
+	 */
+	private $captcha_provider = false;
+
 	########################
 	# Base Functions
 	########################
@@ -114,6 +120,7 @@ class Aauth {
  		// config/aauth.php
 		$this->CI->config->load('aauth');
 		$this->config_vars = $this->CI->config->item('aauth');
+		$this->captcha_provider = $this->resolve_captcha_provider();
 
 		$this->aauth_db = $this->CI->load->database($this->config_vars['db_profile'], true);
 
@@ -155,6 +162,85 @@ class Aauth {
 			$this->cache_group_id[$key]	= $row->id;
 		}
 	}
+
+	/**
+	 * Resolve the single active CAPTCHA provider while supporting the legacy
+	 * recaptcha_active option.
+	 */
+	private function resolve_captcha_provider() {
+		$provider = isset($this->config_vars['captcha_provider'])
+			? strtolower(trim((string) $this->config_vars['captcha_provider']))
+			: '';
+
+		if ($provider === '' || $provider === 'false' || $provider === 'none') {
+			$provider = false;
+		}
+
+		if ($provider !== false && !in_array($provider, array('recaptcha', 'cap'), true)) {
+			throw new InvalidArgumentException("Unsupported CAPTCHA provider: {$provider}");
+		}
+
+		$legacyRecaptcha = !empty($this->config_vars['recaptcha_active']);
+		if ($legacyRecaptcha && $provider === 'cap') {
+			throw new InvalidArgumentException('Cap and reCAPTCHA cannot be enabled at the same time.');
+		}
+
+		return $provider ?: ($legacyRecaptcha ? 'recaptcha' : false);
+	}
+
+	/**
+	 * Whether a CAPTCHA is required for the current login attempt.
+	 */
+	private function captcha_is_required() {
+		return $this->captcha_provider
+			&& $this->config_vars['ddos_protection']
+			&& $this->get_login_attempts() >= $this->config_vars['recaptcha_login_attempts'];
+	}
+
+	/**
+	 * Verify the response for the configured CAPTCHA provider.
+	 */
+	private function verify_captcha_response() {
+		if (!$this->captcha_is_required()) {
+			return true;
+		}
+
+		try {
+			if ($this->captcha_provider === 'recaptcha') {
+				$this->CI->load->helper('recaptchalib');
+				$captcha = new ReCaptcha($this->config_vars['recaptcha_secret']);
+				$response = $captcha->verifyResponse(
+					$this->CI->input->server('REMOTE_ADDR'),
+					$this->CI->input->post('g-recaptcha-response')
+				);
+			} else {
+				$this->CI->load->helper('cap');
+				$captcha = new CapCaptcha(
+					$this->config_vars['cap_instance_url'],
+					$this->config_vars['cap_site_key'],
+					$this->config_vars['cap_secret'],
+					$this->config_vars['cap_widget_script_url']
+				);
+				$response = $captcha->verifyResponse($this->CI->input->post('cap-token'));
+			}
+		} catch (Throwable $exception) {
+			log_message('error', 'Aauth CAPTCHA configuration error: ' . $exception->getMessage());
+			$this->error($this->captcha_error_message());
+			return false;
+		}
+
+		if (!$response->success) {
+			$this->error($this->captcha_error_message());
+			return false;
+		}
+
+		return true;
+	}
+
+	private function captcha_error_message() {
+		$message = $this->CI->lang->line('aauth_error_captcha_not_correct');
+		return $message ?: $this->CI->lang->line('aauth_error_recaptcha_not_correct');
+	}
 	
 	########################
 	# Login Functions
@@ -178,20 +264,13 @@ class Aauth {
 			'path'	 => '/',
 		);
 		$this->CI->input->set_cookie($cookie);
+		if (!$this->verify_captcha_response()) {
+			return false;
+		}
 		if ($this->config_vars['ddos_protection'] && ! $this->update_login_attempts()) {
 
 			$this->error($this->CI->lang->line('aauth_error_login_attempts_exceeded'));
 			return false;
-		}
-		if($this->config_vars['ddos_protection'] && $this->config_vars['recaptcha_active'] && $this->get_login_attempts() > $this->config_vars['recaptcha_login_attempts']){
-			$this->CI->load->helper('recaptchalib');
-			$reCaptcha = new ReCaptcha( $this->config_vars['recaptcha_secret']);
-			$resp = $reCaptcha->verifyResponse( $this->CI->input->server("REMOTE_ADDR"), $this->CI->input->post("g-recaptcha-response") );
-
-			if( ! $resp->success){
-				$this->error($this->CI->lang->line('aauth_error_recaptcha_not_correct'));
-				return false;
-			}
 		}
  		if( $this->config_vars['login_with_name'] == true){
 
@@ -2669,14 +2748,38 @@ class Aauth {
 		}
 	}
 
-	public function generate_recaptcha_field(){
-		$content = '';
-		if($this->config_vars['ddos_protection'] && $this->config_vars['recaptcha_active'] && $this->get_login_attempts() >= $this->config_vars['recaptcha_login_attempts']){
-			$content .= "<script type='text/javascript' src='https://www.google.com/recaptcha/api.js'></script>";
-			$siteKey = $this->config_vars['recaptcha_siteKey'];
-			$content .= "<div class='g-recaptcha' data-sitekey='{$siteKey}'></div>";
+	public function generate_captcha_field(){
+		if (!$this->captcha_is_required()) {
+			return '';
 		}
-		return $content;
+
+		try {
+			if ($this->captcha_provider === 'cap') {
+				$this->CI->load->helper('cap');
+				$captcha = new CapCaptcha(
+					$this->config_vars['cap_instance_url'],
+					$this->config_vars['cap_site_key'],
+					$this->config_vars['cap_secret'],
+					$this->config_vars['cap_widget_script_url'],
+					isset($this->config_vars['cap_widget_mode']) ? $this->config_vars['cap_widget_mode'] : 'checkbox'
+				);
+				return $captcha->renderWidget($this->CI->lang->line('aauth_error_captcha_not_correct'));
+			}
+
+			$siteKey = htmlspecialchars($this->config_vars['recaptcha_siteKey'], ENT_QUOTES, 'UTF-8');
+			return "<script src='https://www.google.com/recaptcha/api.js'></script>"
+				. "<div class='g-recaptcha' data-sitekey='{$siteKey}'></div>";
+		} catch (Throwable $exception) {
+			log_message('error', 'Aauth CAPTCHA rendering error: ' . $exception->getMessage());
+			return '';
+		}
+	}
+
+	/**
+	 * Backward-compatible alias.
+	 */
+	public function generate_recaptcha_field(){
+		return $this->generate_captcha_field();
 	}
 
 	public function update_user_totp_secret($user_id = false, $secret = NULL) {
