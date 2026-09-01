@@ -68,6 +68,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |
 |   ['verification']                    User Verification, if TRUE sends a verification email on account creation.
 |   ['verification_link']               Link for verification without site_url or base_url
+|   ['verification_expiration']         Lifetime of an email verification link (PHP relative date format)
 |   ['reset_password_link']             Link for reset_password without site_url or base_url
 |   ['reset_password_expiration']       Lifetime of a password reset link (PHP relative date format)
 |
@@ -146,6 +147,7 @@ $config_aauth["default"] = array(
 
  'verification'                   => false,
  'verification_link'              => '/account/verification/',
+ 'verification_expiration'        => '+24 hours',
  'reset_password_link'            => '/account/reset_password/',
  'reset_password_expiration'      => '+1 hour',
 

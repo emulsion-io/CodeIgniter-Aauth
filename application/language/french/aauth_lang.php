@@ -5,7 +5,7 @@
 // Account verification
 $lang['aauth_email_verification_subject'] = 'Vérification de Compte';
 $lang['aauth_email_verification_code'] = 'Votre code de vérification est: ';
-$lang['aauth_email_verification_text'] = " Vous pouvez également cliquer sur (ou copier coller) le lien suivant.\n\n";
+$lang['aauth_email_verification_text'] = "Pour vérifier votre adresse e-mail, cliquez sur (ou copiez-collez) le lien suivant :\n\n";
 
 // Password reset
 $lang['aauth_email_reset_subject'] = 'Réinitialiser le mot de passe';

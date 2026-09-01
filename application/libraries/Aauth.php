@@ -913,67 +913,109 @@ class Aauth {
 
 	/**
 	 * Verify user
-	 * Activates user account based on verification code
+	 * Activates a user account using a temporary, single-use token.
 	 * @param int $user_id User id to activate
-	 * @param string $ver_code Code to validate against
+	 * @param string $ver_code Verification token
 	 * @return bool Activation fails/succeeds
 	 */
 	public function verify_user($user_id, $ver_code){
-
-		$query = $this->aauth_db->where('id', $user_id);
-		$query = $this->aauth_db->where('verification_code', $ver_code);
-		$query = $this->aauth_db->get( $this->config_vars['users'] );
-
-		// if ver code is TRUE
-		if( $query->num_rows() > 0 ){
-
-			$data =	 array(
-				'verification_code' => '',
-				'banned' => 0
-			);
-
-			$this->aauth_db->where('id', $user_id);
-			$this->aauth_db->update($this->config_vars['users'] , $data);
-			return true;
+		if (!is_numeric($user_id)
+			|| !is_string($ver_code)
+			|| !preg_match('/\A[a-f0-9]{64}\z/D', $ver_code)) {
+			return false;
 		}
-		return false;
+
+		$token_hash = 'verify:' . hash('sha256', $ver_code);
+		$data = array(
+			'verification_code' => '',
+			'verification_exp' => null,
+			'banned' => 0,
+		);
+
+		$this->aauth_db->where('id', (int) $user_id);
+		$this->aauth_db->where('banned', 1);
+		$this->aauth_db->where('verification_code', $token_hash);
+		$this->aauth_db->where('verification_exp >=', date('Y-m-d H:i:s'));
+		if (!$this->aauth_db->update($this->config_vars['users'], $data)) {
+			return false;
+		}
+
+		return $this->aauth_db->affected_rows() === 1;
+	}
+
+	/**
+	 * Create a temporary, single-use verification link without sending it.
+	 *
+	 * @param int $user_id User id to verify
+	 * @return string|bool Verification link, or FALSE when the user is not found
+	 */
+	public function create_verification_link($user_id){
+		if (!is_numeric($user_id) || (int) $user_id < 1) {
+			return false;
+		}
+
+		$query = $this->aauth_db->where('id', (int) $user_id);
+		$query = $this->aauth_db->where('banned', 1);
+		$query = $this->aauth_db->get($this->config_vars['users']);
+		if ($query->num_rows() < 1) {
+			return false;
+		}
+
+		$expiration = isset($this->config_vars['verification_expiration'])
+			? $this->config_vars['verification_expiration']
+			: '+24 hours';
+		$expires = strtotime($expiration);
+		if ($expires === false || $expires <= time()) {
+			throw new InvalidArgumentException('verification_expiration must resolve to a future date.');
+		}
+
+		$token = bin2hex(random_bytes(32));
+		$data = array(
+			'verification_code' => 'verify:' . hash('sha256', $token),
+			'verification_exp' => date('Y-m-d H:i:s', $expires),
+		);
+
+		$this->aauth_db->where('id', (int) $user_id);
+		if (!$this->aauth_db->update($this->config_vars['users'], $data)) {
+			return false;
+		}
+
+		$this->CI->load->helper('url');
+		$path = trim($this->config_vars['verification_link'], '/')
+			. '/' . (int) $user_id . '/' . rawurlencode($token);
+		return site_url($path);
 	}
 
 	/**
 	 * Send verification email
 	 * Sends a verification email based on user id
 	 * @param int $user_id User id to send verification email to
-	 * @todo return success indicator
+	 * @return bool Email sent successfully
 	 */
 	public function send_verification($user_id){
-
-		$query = $this->aauth_db->where( 'id', $user_id );
-		$query = $this->aauth_db->get( $this->config_vars['users'] );
-
-		if ($query->num_rows() > 0){
-			$row = $query->row();
-
-			$ver_code = bin2hex(random_bytes(32));
-
-			$data['verification_code'] = $ver_code;
-
-			$this->aauth_db->where('id', $user_id);
-			$this->aauth_db->update($this->config_vars['users'], $data);
-
-			$this->CI->load->library('email');
-			$this->CI->load->helper('url');
-
-			if(isset($this->config_vars['email_config']) && is_array($this->config_vars['email_config'])){
-				$this->CI->email->initialize($this->config_vars['email_config']);
-			}
-
-			$this->CI->email->from( $this->config_vars['email'], $this->config_vars['name']);
-			$this->CI->email->to($row->email);
-			$this->CI->email->subject($this->CI->lang->line('aauth_email_verification_subject'));
-			$this->CI->email->message($this->CI->lang->line('aauth_email_verification_code') . $ver_code .
-				$this->CI->lang->line('aauth_email_verification_text') . site_url() .$this->config_vars['verification_link'] . $user_id . '/' . $ver_code );
-			$this->CI->email->send();
+		$query = $this->aauth_db->where('id', $user_id);
+		$query = $this->aauth_db->where('banned', 1);
+		$query = $this->aauth_db->get($this->config_vars['users']);
+		if ($query->num_rows() < 1) {
+			return false;
 		}
+
+		$row = $query->row();
+		$link = $this->create_verification_link($user_id);
+		if ($link === false) {
+			return false;
+		}
+
+		$this->CI->load->library('email');
+		if(isset($this->config_vars['email_config']) && is_array($this->config_vars['email_config'])){
+			$this->CI->email->initialize($this->config_vars['email_config']);
+		}
+
+		$this->CI->email->from($this->config_vars['email'], $this->config_vars['name']);
+		$this->CI->email->to($row->email);
+		$this->CI->email->subject($this->CI->lang->line('aauth_email_verification_subject'));
+		$this->CI->email->message($this->CI->lang->line('aauth_email_verification_text') . $link);
+		return (bool) $this->CI->email->send();
 	}
 
 	/**
@@ -1022,7 +1064,8 @@ class Aauth {
 
 		$data = array(
 			'banned' => 1,
-			'verification_code' => ''
+			'verification_code' => '',
+			'verification_exp' => null,
 		);
 
 		$this->aauth_db->where('id', $user_id);

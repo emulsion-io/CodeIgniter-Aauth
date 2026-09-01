@@ -6,7 +6,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // Account verification
 $lang['aauth_email_verification_subject'] = 'Account Verification';
 $lang['aauth_email_verification_code']    = 'Your verification code is: ';
-$lang['aauth_email_verification_text']    = " You can also click on (or copy and paste) the following link\n\n";
+$lang['aauth_email_verification_text']    = "To verify your email address, click on (or copy and paste) the following link:\n\n";
 
 // Password reset
 $lang['aauth_email_reset_subject'] = 'Reset Password';

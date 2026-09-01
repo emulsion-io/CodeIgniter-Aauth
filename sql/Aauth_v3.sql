@@ -102,6 +102,7 @@ CREATE TABLE `aauth_users` (
   `date_created` datetime DEFAULT NULL,
   `forgot_exp` datetime DEFAULT NULL,
   `verification_code` text COLLATE utf8_general_ci,
+  `verification_exp` datetime DEFAULT NULL,
   `totp_secret` varchar(16) COLLATE utf8_general_ci DEFAULT NULL,
   `ip_address` text COLLATE utf8_general_ci,
   PRIMARY KEY (`id`)
