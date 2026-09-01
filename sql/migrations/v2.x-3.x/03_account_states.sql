@@ -1,4 +1,4 @@
--- Aauth v3: separate email verification and banning states.
+-- Aauth v2.x to v3.x: separate email verification and banning states.
 -- Run this migration once on databases using the former `banned` column.
 
 ALTER TABLE `aauth_users`
