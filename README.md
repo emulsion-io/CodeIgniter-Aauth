@@ -3,7 +3,13 @@
 </p>
 
 ***
-Aauth is a User Authorization Library for CodeIgniter 2.x and 3.x, which aims to make easy some essential jobs such as login, permissions and access operations. Despite its ease of use, it has also very advanced features like private messages, groupping, access management, and public access.
+Aauth is a User Authorization Library for CodeIgniter 3.x, which aims to make easy some essential jobs such as login, permissions and access operations. Despite its ease of use, it has also very advanced features like private messages, groupping, access management, and public access.
+
+### Version 3
+***
+This version requires PHP 8.2 or newer and is compatible with the [pocketarc CodeIgniter fork](https://github.com/pocketarc/codeigniter).
+
+Credits: Simonet Fabrice &lt;fabrice@emulsion.io&gt;
 
 **This is Quick Start page. You can also take a look at the [detailed Documentation Wiki](https://github.com/magefly/CodeIgniter-Aauth/wiki) to learn about other great Features**
 

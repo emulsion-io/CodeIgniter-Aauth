@@ -1,19 +1,22 @@
 <?php if (!defined('BASEPATH')) exit('No direct script access allowed');
 
 /**
- * Aauth is a User Authorization Library for CodeIgniter 2.x, which aims to make
+ * Aauth is a User Authorization Library for CodeIgniter 3.x, which aims to make
  * easy some essential jobs such as login, permissions and access operations.
  * Despite ease of use, it has also very advanced features like private messages,
  * groupping, access management, public access etc..
  *
- * @author	Emre Akay <emreakayfb@hotmail.com>
+ * @author		Emre Akay <emreakayfb@hotmail.com>
  * @contributor Jacob Tomlinson
  * @contributor Tim Swagger (Renowne, LLC) <tim@renowne.com>
  * @contributor Raphael Jackstadt <info@rejack.de>
+ * @contributor Simonet Fabrice <fabrice@emulsion.io>
  *
  * @copyright 2014-2018 Emre Akay
  *
- * @version 2.5.15
+ * @version 3
+ * @requires PHP 8.2+
+ * @see https://github.com/pocketarc/codeigniter Compatible CodeIgniter fork
  *
  * @license LGPL
  * @license http://opensource.org/licenses/LGPL-3.0 Lesser GNU Public License
@@ -22,13 +25,6 @@
  * https://github.com/emreakay/CodeIgniter-Aauth
  *
  * @todo separate (on some level) the unvalidated users from the "banned" users
- * 
- * Modified by Fabrice Simonet | emulsion.io
- * 
- * Updated for CodeIgniter > 3.0.x and PHP > 8.3 
- * change lib encrypt for new lib encryption
- * fix some bugs for php 8.3
- * 
  */
 class Aauth {
 
@@ -83,21 +79,21 @@ class Aauth {
 	 * @access public
 	 * @var object
 	 */
-	public $aauth_db;
+	 public $aauth_db;
 
 	/**
 	 * Array to cache permission-ids.
 	 * @access private
 	 * @var array
 	 */
-	private $cache_perm_id;
+	 private $cache_perm_id;
 
 	/**
 	 * Array to cache group-ids.
 	 * @access private
 	 * @var array
 	 */
-	private $cache_group_id;
+	 private $cache_group_id;
 
 	########################
 	# Base Functions
@@ -201,7 +197,7 @@ class Aauth {
 				return false;
 			}
 		}
-		if( $this->config_vars['login_with_name'] == true){
+ 		if( $this->config_vars['login_with_name'] == true){
 
 			if( !$identifier OR strlen($pass) < $this->config_vars['min'] OR strlen($pass) > $this->config_vars['max'] )
 			{
@@ -209,15 +205,15 @@ class Aauth {
 				return false;
 			}
 			$db_identifier = 'username';
-		}else{
-
-			if( !filter_var($identifier, FILTER_VALIDATE_EMAIL) OR strlen($pass) < $this->config_vars['min'] OR strlen($pass) > $this->config_vars['max'] )
+ 		}else{
+			$this->CI->load->helper('email');
+			if( !valid_email($identifier) OR strlen($pass) < $this->config_vars['min'] OR strlen($pass) > $this->config_vars['max'] )
 			{
 				$this->error($this->CI->lang->line('aauth_error_login_failed_email'));
 				return false;
 			}
 			$db_identifier = 'email';
-		}
+ 		}
 
 		// if user is not verified
 		$query = null;
@@ -702,6 +698,7 @@ class Aauth {
 	# User Functions
 	########################
 
+	//tested
 	/**
 	 * Create user
 	 * Creates a new user
@@ -718,29 +715,35 @@ class Aauth {
 			if (empty($username)){
 				$this->error($this->CI->lang->line('aauth_error_username_required'));
 				$valid = false;
+				//Ray('user required');
 			}
 		}
 		if ($this->user_exist_by_username($username) && $username != false) {
 			$this->error($this->CI->lang->line('aauth_error_username_exists'));
 			$valid = false;
+			//Ray('user exist');
 		}
 
 		if ($this->user_exist_by_email($email)) {
 			$this->error($this->CI->lang->line('aauth_error_email_exists'));
 			$valid = false;
+			//Ray('mail exist');
 		}
 		$valid_email = (bool) filter_var($email, FILTER_VALIDATE_EMAIL);
 		if (!$valid_email){
 			$this->error($this->CI->lang->line('aauth_error_email_invalid'));
 			$valid = false;
+			//Ray('email');
 		}
 		if ( strlen($pass) < $this->config_vars['min'] OR strlen($pass) > $this->config_vars['max'] ){
 			$this->error($this->CI->lang->line('aauth_error_password_invalid'));
 			$valid = false;
+			//Ray('pass');
 		}
 		if ($username != false && !ctype_alnum(str_replace($this->config_vars['additional_valid_chars'], '', $username))){
 			$this->error($this->CI->lang->line('aauth_error_username_invalid'));
 			$valid = false;
+			//Ray('username bad');
 		}
 		if (!$valid) {
 			return false;
@@ -787,6 +790,7 @@ class Aauth {
 		}
 	}
 
+	//tested
 	/**
 	 * Update user
 	 * Updates existing user details
@@ -851,6 +855,7 @@ class Aauth {
 		return $this->aauth_db->update($this->config_vars['users'], $data);
 	}
 
+	//tested
 	/**
 	 * List users
 	 * Return users as an object array
@@ -903,6 +908,7 @@ class Aauth {
 		return $query->result();
 	}
 
+	//tested
 	/**
 	 * Get user
 	 * Get user information
@@ -1276,6 +1282,7 @@ class Aauth {
 	# Group Functions
 	########################
 
+	//tested
 	/**
 	 * Create group
 	 * Creates a new group
@@ -1506,11 +1513,12 @@ class Aauth {
 		$this->aauth_db->where('user_id', $user_id);
 		return $this->aauth_db->delete($this->config_vars['user_to_group']);
 	}
-
+	//tested
+	
 	/**
 	 * Is member
 	 * Check if current user is a member of a group
-	 * @param int|string $group_par Group id or name to check, use pipe | for check multiple groups same time
+	 * @param int|string $group_par Group id or name to check
 	 * @param int|bool $user_id User id, if not given current user
 	 * @return bool
 	 */
@@ -2062,6 +2070,7 @@ class Aauth {
 	# Private Message Functions
 	########################
 
+	//tested
 	/**
 	 * Send Private Message
 	 * Send a private message to another user
@@ -2086,9 +2095,9 @@ class Aauth {
 		}
 
 		if ($this->config_vars['pm_encryption']){
-			$this->CI->load->library('encryption');
-			$title = $this->CI->encryption->encrypt($title);
-			$message = $this->CI->encryption->encrypt($message);
+			$this->CI->load->library('encrypt');
+			$title = $this->CI->encrypt->encode($title);
+			$message = $this->CI->encrypt->encode($message);
 		}
 
 		$data = array(
@@ -2113,9 +2122,9 @@ class Aauth {
 	 */
 	public function send_pms( $sender_id, $receiver_ids, $title, $message ){
 		if ($this->config_vars['pm_encryption']){
-			$this->CI->load->library('encryption');
-			$title = $this->CI->encryption->encrypt($title);
-			$message = $this->CI->encryption->encrypt($message);
+			$this->CI->load->library('encrypt');
+			$title = $this->CI->encrypt->encode($title);
+			$message = $this->CI->encrypt->encode($message);
 		}
 		if ($sender_id && ($this->is_banned($sender_id) || !$this->user_exist_by_id($sender_id))){
 			$this->error($this->CI->lang->line('aauth_error_no_user'));
@@ -2178,12 +2187,12 @@ class Aauth {
 		$result = $query->result();
 
 		if ($this->config_vars['pm_encryption']){
-			$this->CI->load->library('encryption');
+			$this->CI->load->library('encrypt');
 
 			foreach ($result as $k => $r)
 			{
-				$result[$k]->title = $this->CI->encryption->decrypt($r->title);
-				$result[$k]->message = $this->CI->encryption->decrypt($r->message);
+				$result[$k]->title = $this->CI->encrypt->decode($r->title);
+				$result[$k]->message = $this->CI->encrypt->decode($r->message);
 			}
 		}
 
@@ -2227,9 +2236,9 @@ class Aauth {
 		}
 
 		if ($this->config_vars['pm_encryption']){
-			$this->CI->load->library('encryption');
-			$result->title = $this->CI->encryption->decrypt($result->title);
-			$result->message = $this->CI->encryption->decrypt($result->message);
+			$this->CI->load->library('encrypt');
+			$result->title = $this->CI->encrypt->decode($result->title);
+			$result->message = $this->CI->encrypt->decode($result->message);
 		}
 
 		return $result;
@@ -2311,6 +2320,7 @@ class Aauth {
 	//tested
 	/**
 	 * Set Private Message as read
+	 * Set private message as read
 	 * @param int $pm_id Private message id to mark as read
 	 */
 	public function set_as_read_pm($pm_id){
@@ -2320,25 +2330,6 @@ class Aauth {
 		);
 
 		$this->aauth_db->update( $this->config_vars['pms'], $data, "id = $pm_id");
-	}
-
-	//tested
-	/**
-	 * Set all Private Messages as read
-	 * @param int|bool $receiver_id User id for message receiver, if FALSE sets for current user
-	 */
-	public function set_as_read_all_pm($receiver_id = false)
-	{
-
-		if (!$receiver_id) {
-			$receiver_id = $this->CI->session->userdata('id');
-		}
-
-		$data = array(
-			'date_read' => date('Y-m-d H:i:s'),
-		);
-
-		$this->aauth_db->update($this->config_vars['pms'], $data, "receiver_id = $receiver_id");
 	}
 
 	########################
@@ -2697,7 +2688,11 @@ class Aauth {
 		return $content;
 	}
 
-	public function update_user_totp_secret($user_id, $secret) {
+	public function update_user_totp_secret($user_id = false, $secret = NULL) {
+
+		if ($secret === NULL) {
+			return false;
+		}
 
 		if ($user_id == false)
 			$user_id = $this->CI->session->userdata('id');
@@ -2764,6 +2759,109 @@ class Aauth {
 	}
 
 } // end class
+
+// $this->CI->session->userdata('id')
+
+/* coming with v3
+----------------
+ * captcha (hmm bi bakalım)
+ * parametre olarak array alma
+ * stacoverflow
+ * public id sini 0 a eşitleyip öyle kontrol yapabilirdik (oni boşver uşağum)
+ * lock_user (until parametrsi)
+ * unlock_user
+ * send_pm() in errounda receiver ve sender için ayrı errorlar olabilür
+ * ddos protect olayını daha mantıklı hale getür
+ * geçici ban ve e-mail ile tkrar aktifleştime olayı
+*/
+
+/**
+ * Coming with v2
+ * -------------
+ *
+ * tmam // permission id yi permission parametre yap
+ * mail fonksiyonları imtihanı
+ * tamam // login e ip aderesi de eklemek lazım
+ * list_users da grup_par verilirse ve adamın birden fazla grubu varsa nolurkun? // bi denemek lazım belki distinct ile düzelir
+ * tamam // eğer grup silinmişse kullanıcıları da o gruptan sil (fire)
+ * tamam //	 ismember la is admine 2. parametre olarak user id ekle
+ * tamam // kepp infos errors die bişey yap ajax requestlerinde silinir errorlar
+ * tmam // user variables
+ * tamam // sistem variables
+ * tmam // user perms
+ * tamam gibi // 4mysql index fulltext index??
+ * tamam //delete_user dan sonra grup ve perms ler de silinmeli
+ * login() içinde login'i doğru şekilde olsa da yine de login attempt artıyo kesin düzeltilecek
+ * keep_errors ve keep_infos calismiyor
+ *
+ *
+ *
+ * -----------
+ * ok
+ *
+ * unban_user() added // unlock_user
+ * remove member added // fire_member
+ * allow() changed to allow_group
+ * deny() changed to deny_group
+ * is member a yeni parametre eklendi
+ * allow_user() added
+ * deny_user() added
+ * keep_infos() added
+ * kepp_errors() added
+ * get_errors() changed to print_errors()
+ * get_infos() changed to print_infos()
+ * User and Aauth System Variables.
+set_user_var( $key, $value, $user_id = FALSE )
+get_user_var( $key, $user_id = FALSE)
+unset
+set_system_var( $key, $value, $user_id = FALSE )
+get_system_var( $key, $user_id = FALSE)
+unset
+functions added
+ *
+ *
+ *
+ *
+ *
+ * Done staff v1
+ * -----------
+ * tamam hacı // control die bi fonksiyon yazıp adam önce login omuşmu sonra da yetkisi var mı die kontrol et. yetkisi yoksa yönlendir ve aktivitiyi güncelle
+ * tamam hacı // grupları yetkilendirme, yetki ekleme, alma alow deny
+ * tamam gibi // Email and pass validation with form helper
+ * biraz oldu // laguage file support
+ * tamam // forget pass
+ * tamam // yetkilendirme sistemi
+ * tamam // Login e remember eklencek
+ * tamam // şifremi unuttum ve random string
+ * sanırım şimdi tamam // hatalı girişde otomatik süreli kilit
+ * ??  tamam heral // mail ile bilgilendirme
+ * tamam heral // activasyon emaili
+ * tamam gibi // yerine email check // username check
+ * tamamlandı // public erişimi
+ * tamam // Private messsages
+ * tamam össen // errorlar düzenlenecek hepisiiii
+ * tamam ama engelleme ve limit olayı koymadım. // pm için okundu ve göster, sil, engelle? die fonksiyonlar eklencek , gönderilen pmler, alınan pmler, arasındaki pmler,
+ * tamm// already existedleri info yap onlar error değil hacım
+ *
+
+
+
+
+/*
+// if user's email is found
+if ($query->num_rows() > 0) {
+$row = $query->row();
+
+// DDos protection
+if ( $this->config_vars['dos_protection'] and $row->last_login_attempt != '' and
+(strtotime("now") + 30 * $this->config_vars['try'] ) < strtotime($row->last_login_attempt) ) {
+$this->error($this->CI->lang->line('exceeded'));
+return FALSE;
+}
+}
+ */
+
+
 
 /* End of file Aauth.php */
 /* Location: ./application/libraries/Aauth.php */

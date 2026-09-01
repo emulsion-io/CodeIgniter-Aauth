@@ -5,7 +5,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 | -------------------------------------------------------------------
 | Aauth Config
 | -------------------------------------------------------------------
-| A library Basic Authorization for CodeIgniter 2.x and 3.x
+| A library Basic Authorization for CodeIgniter 3.x
 |
 | -------------------------------------------------------------------
 | EXPLANATION
