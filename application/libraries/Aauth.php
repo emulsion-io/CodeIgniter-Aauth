@@ -195,7 +195,7 @@ class Aauth {
 		}
  		if( $this->config_vars['login_with_name'] == true){
 
-			if( !$identifier OR strlen($pass) < $this->config_vars['min'] OR strlen($pass) > $this->config_vars['max'] )
+			if (!$identifier OR !is_string($pass) OR $pass === '')
 			{
 				$this->error($this->CI->lang->line('aauth_error_login_failed_name'));
 				return false;
@@ -203,7 +203,7 @@ class Aauth {
 			$db_identifier = 'username';
  		}else{
 			$this->CI->load->helper('email');
-			if( !valid_email($identifier) OR strlen($pass) < $this->config_vars['min'] OR strlen($pass) > $this->config_vars['max'] )
+			if (!valid_email($identifier) OR !is_string($pass) OR $pass === '')
 			{
 				$this->error($this->CI->lang->line('aauth_error_login_failed_email'));
 				return false;
@@ -301,10 +301,8 @@ class Aauth {
 
 		$row = $query->row();
 
-		// if email and pass matches and not banned
-		$password = ($this->config_vars['use_password_hash'] ? $pass : $this->hash_password($pass, $row->id));
-
-		if ( $query->num_rows() != 0 && $this->verify_password($password, $row->pass) ) {
+		// if identifier and password match and the account is not banned
+		if ($this->verify_password($pass, $row->pass, $row->id)) {
 
 			// If email and pass matches
 			// create session
@@ -1249,17 +1247,44 @@ class Aauth {
 	/**
 	 * Verify password
 	 * Verfies the hashed password
-	 * @param string $password Password
-	 * @param string $hash Hashed Password
-	 * @param string $user_id
+	 * Transparently migrates valid legacy hashes and refreshes modern hashes
+	 * whenever the configured algorithm or options change.
+	 *
+	 * @param string $password Plain-text password
+	 * @param string $hash Stored password hash
+	 * @param int|bool $user_id User id required to verify and migrate a legacy hash
 	 * @return bool False or True
 	 */
-	function verify_password($password, $hash) {
-		if($this->config_vars['use_password_hash']){
-			return password_verify($password, $hash);
-		}else{
-			return ($password == $hash ? true : false);
+	function verify_password($password, $hash, $user_id = false) {
+		$valid = password_verify($password, $hash);
+
+		if (!$valid && $user_id !== false) {
+			$legacy_salt = md5((string) $user_id);
+			$legacy_hash = hash($this->config_vars['hash'], $legacy_salt . $password);
+			$valid = hash_equals($hash, $legacy_hash);
 		}
+
+		if (!$valid) {
+			return false;
+		}
+
+		if ($this->config_vars['use_password_hash'] && $user_id !== false && password_needs_rehash(
+			$hash,
+			$this->config_vars['password_hash_algo'],
+			$this->config_vars['password_hash_options']
+		)) {
+			$data = array(
+				'pass' => password_hash(
+					$password,
+					$this->config_vars['password_hash_algo'],
+					$this->config_vars['password_hash_options']
+				)
+			);
+			$this->aauth_db->where('id', $user_id);
+			$this->aauth_db->update($this->config_vars['users'], $data);
+		}
+
+		return true;
 	}
 
 	########################
