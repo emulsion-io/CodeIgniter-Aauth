@@ -95,6 +95,23 @@ The legacy `recaptcha_active` option remains supported when `captcha_provider` i
 * Langugage and config file support
 * Flexible implementation
 
+#### Group membership checks
+
+`is_member()` checks whether the user belongs to at least one supplied group. It accepts a single group, an array, or the legacy pipe-separated syntax:
+
+```php
+$this->aauth->is_member('admin');
+$this->aauth->is_member('admin|editor');
+$this->aauth->is_member(['admin', 'editor']);
+```
+
+The intent can also be made explicit:
+
+```php
+$this->aauth->is_member_of_any(['admin', 'editor']);
+$this->aauth->is_member_of_all(['admin', 'editor']);
+```
+
 ### What is new in Version 2
 ***
 * User Permissions

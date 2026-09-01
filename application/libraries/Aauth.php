@@ -1638,52 +1638,111 @@ class Aauth {
 	
 	/**
 	 * Is member
-	 * Check if current user is a member of a group
-	 * @param int|string $group_par Group id or name to check
+	 * Check if current user is a member of at least one group.
+	 * Accepts a group id/name, an array, or the legacy "group1|group2" syntax.
+	 *
+	 * @param int|string|array $group_par Group ids or names to check
 	 * @param int|bool $user_id User id, if not given current user
 	 * @return bool
 	 */
 	public function is_member( $group_par, $user_id = false ) {
-
-		// if user_id FALSE (not given), current user
-		if( ! $user_id){
+		if ($user_id === false) {
 			$user_id = $this->CI->session->userdata('id');
 		}
 
-		$this->aauth_db->where('user_id', $user_id);
-
-		$groups_par = explode('|', $group_par);
-		if(count($groups_par) > 1){
-			$this->aauth_db->group_start();
-
-			$igroup = 0;
-			foreach ($groups_par as $key => $group_p) {
-				
-				$group_id = $this->get_group_id($group_p);
-				if($igroup == 0){
-					$this->aauth_db->where('group_id', $group_id);
-				} else {
-					$this->aauth_db->or_where('group_id', $group_id);
-				}
-
-				$igroup++;
-			}
-
-			$this->aauth_db->group_end();
-		} else {
-			$group_id = $this->get_group_id($group_par);
-			$this->aauth_db->where('group_id', $group_id);
-		}
-		
-		$query = $this->aauth_db->get($this->config_vars['user_to_group']);
-
-		$row = $query->row();
-
-		if ($query->num_rows() > 0) {
-			return true;
-		} else {
+		if (!$user_id) {
 			return false;
 		}
+
+		$group_ids = $this->resolve_group_ids($group_par, false);
+		if (empty($group_ids)) {
+			return false;
+		}
+
+		$this->aauth_db->where('user_id', $user_id);
+		$this->aauth_db->where_in('group_id', $group_ids);
+		$query = $this->aauth_db->get($this->config_vars['user_to_group']);
+
+		return $query->num_rows() > 0;
+	}
+
+	/**
+	 * Check if current user is a member of at least one supplied group.
+	 *
+	 * @param int|string|array $groups Group ids or names to check
+	 * @param int|bool $user_id User id, if not given current user
+	 * @return bool
+	 */
+	public function is_member_of_any($groups, $user_id = false) {
+		return $this->is_member($groups, $user_id);
+	}
+
+	/**
+	 * Check if current user is a member of every supplied group.
+	 * Unknown groups make the check fail.
+	 *
+	 * @param int|string|array $groups Group ids or names to check
+	 * @param int|bool $user_id User id, if not given current user
+	 * @return bool
+	 */
+	public function is_member_of_all($groups, $user_id = false) {
+		if ($user_id === false) {
+			$user_id = $this->CI->session->userdata('id');
+		}
+
+		if (!$user_id) {
+			return false;
+		}
+
+		$group_ids = $this->resolve_group_ids($groups, true);
+		if ($group_ids === false || empty($group_ids)) {
+			return false;
+		}
+
+		$this->aauth_db->select('group_id');
+		$this->aauth_db->distinct();
+		$this->aauth_db->where('user_id', $user_id);
+		$this->aauth_db->where_in('group_id', $group_ids);
+		$query = $this->aauth_db->get($this->config_vars['user_to_group']);
+
+		return $query->num_rows() === count($group_ids);
+	}
+
+	/**
+	 * Resolve group ids from scalar, array or legacy pipe-separated input.
+	 *
+	 * @param int|string|array $groups
+	 * @param bool $fail_on_unknown Return FALSE if any group is unknown
+	 * @return array|bool
+	 */
+	private function resolve_group_ids($groups, $fail_on_unknown = false) {
+		if (is_string($groups) && strpos($groups, '|') !== false) {
+			$groups = explode('|', $groups);
+		} elseif (!is_array($groups)) {
+			$groups = array($groups);
+		}
+
+		$group_ids = array();
+		foreach ($groups as $group) {
+			if (!is_int($group) && !is_string($group)) {
+				if ($fail_on_unknown) {
+					return false;
+				}
+				continue;
+			}
+
+			$group_id = $this->get_group_id($group);
+			if ($group_id === false) {
+				if ($fail_on_unknown) {
+					return false;
+				}
+				continue;
+			}
+
+			$group_ids[] = (int) $group_id;
+		}
+
+		return array_values(array_unique($group_ids));
 	}
 
 	/**
