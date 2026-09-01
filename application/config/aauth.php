@@ -73,8 +73,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |   ['password_hash_options']           password_hash options array 
 |                                       for details see http://php.net/manual/en/function.password-hash.php
 |
-|   ['pm_encryption']                   Enables PM Encryption, needs configured CI Encryption Class.
-|                                       for details see: http://www.codeigniter.com/userguide2/libraries/encryption.html
+|   ['pm_encryption']                   Enables PM encryption and requires the Encrypt library provided by the compatible fork.
 |   ['pm_cleanup_max_age']              PM Cleanup max age (in relative format), PM's are older than max age get deleted with 'cleanup_pms()'
 |                                       Relative Format (e.g. '2 week', '1 month') 
 |                                       for details see http://php.net/manual/de/datetime.formats.relative.php
@@ -104,8 +103,8 @@ $config_aauth["default"] = array(
 
  'remember'                       => ' +3 days',
 
- 'max'                            => 13,
- 'min'                            => 5,
+ 'max'                            => 50,
+ 'min'                            => 10,
 
  'additional_valid_chars'         => array(),
 

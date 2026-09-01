@@ -1,4 +1,6 @@
 <?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
 /**
  * This is a PHP library that handles calling reCAPTCHA.
  *    - Documentation and latest version
@@ -41,11 +43,9 @@ class ReCaptchaResponse
 
 class ReCaptcha
 {
-    private static $_signupUrl = "https://www.google.com/recaptcha/admin";
     private static $_siteVerifyUrl =
-        "https://www.google.com/recaptcha/api/siteverify?";
+        "https://www.google.com/recaptcha/api/siteverify";
     private $_secret;
-    private static $_version = "php_1.0";
 
     /**
      * Constructor.
@@ -55,44 +55,32 @@ class ReCaptcha
     public function __construct($secret)
     {
         if ($secret == null || $secret == "") {
-            die("To use reCAPTCHA you must get an API key from <a href='"
-                . self::$_signupUrl . "'>" . self::$_signupUrl . "</a>");
+            throw new InvalidArgumentException('A reCAPTCHA secret key is required.');
         }
         $this->_secret=$secret;
     }
 
     /**
-     * Encodes the given data into a query string format.
-     *
-     * @param array $data array of string elements to be encoded.
-     *
-     * @return string - encoded request.
-     */
-    private function _encodeQS($data)
-    {
-        $req = "";
-        foreach ($data as $key => $value) {
-            $req .= $key . '=' . urlencode(stripslashes($value)) . '&';
-        }
-
-        // Cut the last '&'
-        $req=substr($req, 0, strlen($req)-1);
-        return $req;
-    }
-
-    /**
-     * Submits an HTTP GET to a reCAPTCHA server.
+     * Submits an HTTP POST to the reCAPTCHA server.
      *
      * @param string $path url path to recaptcha server.
      * @param array  $data array of parameters to be sent.
      *
-     * @return array response
+     * @return string|false response
      */
-    private function _submitHTTPGet($path, $data)
+    private function _submitHTTPPost($path, $data)
     {
-        $req = $this->_encodeQS($data);
-        $response = file_get_contents($path . $req);
-        return $response;
+        $context = stream_context_create(array(
+            'http' => array(
+                'method' => 'POST',
+                'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+                'content' => http_build_query($data, '', '&', PHP_QUERY_RFC3986),
+                'timeout' => 10,
+                'ignore_errors' => true,
+            ),
+        ));
+
+        return file_get_contents($path, false, $context);
     }
 
     /**
@@ -114,27 +102,26 @@ class ReCaptcha
             return $recaptchaResponse;
         }
 
-        $getResponse = $this->_submitHttpGet(
+        $apiResponse = $this->_submitHTTPPost(
             self::$_siteVerifyUrl,
             array (
                 'secret' => $this->_secret,
                 'remoteip' => $remoteIp,
-                'v' => self::$_version,
                 'response' => $response
             )
         );
-        $answers = json_decode($getResponse, true);
+        $answers = is_string($apiResponse) ? json_decode($apiResponse, true) : null;
         $recaptchaResponse = new ReCaptchaResponse();
 
-        if (trim($answers['success']) == true) {
+        if (is_array($answers) && !empty($answers['success'])) {
             $recaptchaResponse->success = true;
         } else {
             $recaptchaResponse->success = false;
-            $recaptchaResponse->errorCodes = $answers['error-codes'];
+            $recaptchaResponse->errorCodes = is_array($answers) && isset($answers['error-codes'])
+                ? $answers['error-codes']
+                : array('network-error');
         }
 
         return $recaptchaResponse;
     }
 }
-
-?>

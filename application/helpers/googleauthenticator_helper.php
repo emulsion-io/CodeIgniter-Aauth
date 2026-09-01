@@ -1,4 +1,5 @@
 <?php
+defined('BASEPATH') OR exit('No direct script access allowed');
 
 /**
  * PHP Class for handling Google Authenticator 2-factor authentication
@@ -27,7 +28,7 @@ class PHPGangsta_GoogleAuthenticator
 
         $secret = '';
         for ($i = 0; $i < $secretLength; $i++) {
-            $secret .= $validChars[array_rand($validChars)];
+            $secret .= $validChars[random_int(0, count($validChars) - 1)];
         }
         return $secret;
     }
@@ -99,7 +100,7 @@ class PHPGangsta_GoogleAuthenticator
 
         for ($i = -$discrepancy; $i <= $discrepancy; $i++) {
             $calculatedCode = $this->getCode($secret, $currentTimeSlice + $i);
-            if ($calculatedCode == $code ) {
+            if (hash_equals($calculatedCode, (string) $code)) {
                 return true;
             }
         }
