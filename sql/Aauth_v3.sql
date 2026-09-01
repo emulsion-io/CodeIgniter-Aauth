@@ -100,7 +100,7 @@ CREATE TABLE `aauth_users` (
   `last_login` datetime DEFAULT NULL,
   `last_activity` datetime DEFAULT NULL,
   `date_created` datetime DEFAULT NULL,
-  `forgot_exp` text COLLATE utf8_general_ci,
+  `forgot_exp` datetime DEFAULT NULL,
   `remember_time` datetime DEFAULT NULL,
   `remember_exp` text COLLATE utf8_general_ci,
   `verification_code` text COLLATE utf8_general_ci,

@@ -23,6 +23,32 @@ The default links used by Aauth map to:
 
 Set `totp_active` to `true` to enforce TOTP for users who configured a secret. Set `totp_two_step_login_active` to `true` to use the dedicated second-factor page.
 
+### Temporary password reset links
+***
+`remind_password($email)` still emails a reset link for backward compatibility. To create the same temporary link without sending an email, use:
+
+```php
+$link = $this->aauth->create_password_reset_link($email);
+```
+
+The caller is then responsible for sharing the link through a trusted channel. Do not display it on a public password-recovery page, as that would let anyone take over an account by entering its email address.
+
+Reset links expire after one hour by default and can only be used once:
+
+```php
+'reset_password_expiration' => '+1 hour',
+```
+
+Only an SHA-256 digest of the random token is stored. The reset form lets the user choose the new password; passwords are no longer generated or sent by email.
+
+`reset_password()` now receives the token and the new password:
+
+```php
+$success = $this->aauth->reset_password($token, $newPassword);
+```
+
+Reset links created by older releases are intentionally invalidated by this change because they were stored in plain text and had no enforced expiration.
+
 ### CAPTCHA providers
 ***
 Aauth can use either Google reCAPTCHA or a self-hosted [Cap](https://trycap.dev/guide/) instance. Only one provider can be selected at a time.

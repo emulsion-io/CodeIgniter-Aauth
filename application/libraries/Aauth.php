@@ -566,93 +566,142 @@ class Aauth {
 	}
 
 	/**
-	 * Remind password
-	 * Emails user with link to reset password
-	 * @param string $email Email for account to remind
-	 * @return bool Remind fails/succeeds
+	 * Create a temporary, single-use password reset link without sending it.
+	 *
+	 * @param string $email User email address
+	 * @return string|bool Reset link, or FALSE when the account is not found
 	 */
-	public function remind_password($email){
-
-		$query = $this->aauth_db->where( 'email', $email );
-		$query = $this->aauth_db->get( $this->config_vars['users'] );
-
-		if ($query->num_rows() > 0){
-			$row = $query->row();
-
-			$ver_code = bin2hex(random_bytes(32));
-
-			$data['verification_code'] = $ver_code;
-
-			$this->aauth_db->where('email', $email);
-			$this->aauth_db->update($this->config_vars['users'], $data);
-
-			$this->CI->load->library('email');
-			$this->CI->load->helper('url');
-
-			if(isset($this->config_vars['email_config']) && is_array($this->config_vars['email_config'])){
-				$this->CI->email->initialize($this->config_vars['email_config']);
-			}
-
-			$this->CI->email->from( $this->config_vars['email'], $this->config_vars['name']);
-			$this->CI->email->to($row->email);
-			$this->CI->email->subject($this->CI->lang->line('aauth_email_reset_subject'));
-			$this->CI->email->message($this->CI->lang->line('aauth_email_reset_text') . site_url() . $this->config_vars['reset_password_link'] . $ver_code );
-			$this->CI->email->send();
-
-			return true;
+	public function create_password_reset_link($email){
+		if (!is_string($email) || !filter_var(trim($email), FILTER_VALIDATE_EMAIL)) {
+			return false;
 		}
-		return false;
+		$email = trim($email);
+
+		$query = $this->aauth_db->where('email', $email);
+		$query = $this->aauth_db->where('banned', 0);
+		$query = $this->aauth_db->get($this->config_vars['users']);
+
+		if ($query->num_rows() < 1) {
+			return false;
+		}
+
+		$expiration = isset($this->config_vars['reset_password_expiration'])
+			? $this->config_vars['reset_password_expiration']
+			: '+1 hour';
+		$expires = strtotime($expiration);
+		if ($expires === false || $expires <= time()) {
+			throw new InvalidArgumentException('reset_password_expiration must resolve to a future date.');
+		}
+
+		$token = bin2hex(random_bytes(32));
+		$data = array(
+			'verification_code' => 'reset:' . hash('sha256', $token),
+			'forgot_exp' => date('Y-m-d H:i:s', $expires),
+		);
+
+		$this->aauth_db->where('id', $query->row()->id);
+		if (!$this->aauth_db->update($this->config_vars['users'], $data)) {
+			return false;
+		}
+
+		$this->CI->load->helper('url');
+		$path = trim($this->config_vars['reset_password_link'], '/') . '/' . rawurlencode($token);
+		return site_url($path);
 	}
 
 	/**
-	 * Reset password
-	 * Generate new password and email it to the user
-	 * @param string $ver_code Verification code for account
-	 * @return bool Password reset fails/succeeds
+	 * Email a temporary password reset link.
+	 *
+	 * Kept for backward compatibility. Use create_password_reset_link() when
+	 * another trusted delivery channel is responsible for sharing the link.
+	 *
+	 * @param string $email User email address
+	 * @return bool Email sent successfully
 	 */
-	public function reset_password($ver_code){
-
-		$query = $this->aauth_db->where('verification_code', $ver_code);
-		$query = $this->aauth_db->get( $this->config_vars['users'] );
-
-		$this->CI->load->helper('string');
-		$pass_length = ($this->config_vars['min']&1 ? $this->config_vars['min']+1 : $this->config_vars['min']);
-		$pass = random_string('alnum', $pass_length);
-
-		if( $query->num_rows() > 0 ){
-
-			$row = $query->row();
-			$data =	 array(
-				'verification_code' => '',
-				'pass' => $this->hash_password($pass, $row->id)
-			);
-
-		 	if($this->config_vars['totp_active'] == true AND $this->config_vars['totp_reset_over_reset_password'] == true){
-		 		$data['totp_secret'] = null;
-		 	}
-
-			$email = $row->email;
-
-			$this->aauth_db->where('id', $row->id);
-			$this->aauth_db->update($this->config_vars['users'] , $data);
-
-			$this->CI->load->library('email');
-
-			if(isset($this->config_vars['email_config']) && is_array($this->config_vars['email_config'])){
-				$this->CI->email->initialize($this->config_vars['email_config']);
-			}
-
-			$this->CI->email->from( $this->config_vars['email'], $this->config_vars['name']);
-			$this->CI->email->to($email);
-			$this->CI->email->subject($this->CI->lang->line('aauth_email_reset_success_subject'));
-			$this->CI->email->message($this->CI->lang->line('aauth_email_reset_success_new_password') . $pass);
-			$this->CI->email->send();
-
-			return true;
+	public function remind_password($email){
+		$email = is_string($email) ? trim($email) : '';
+		$link = $this->create_password_reset_link($email);
+		if ($link === false) {
+			return false;
 		}
 
-		$this->error($this->CI->lang->line('aauth_error_vercode_invalid'));
-		return false;
+		$this->CI->load->library('email');
+		if(isset($this->config_vars['email_config']) && is_array($this->config_vars['email_config'])){
+			$this->CI->email->initialize($this->config_vars['email_config']);
+		}
+
+		$this->CI->email->from($this->config_vars['email'], $this->config_vars['name']);
+		$this->CI->email->to($email);
+		$this->CI->email->subject($this->CI->lang->line('aauth_email_reset_subject'));
+		$this->CI->email->message($this->CI->lang->line('aauth_email_reset_text') . $link);
+		return (bool) $this->CI->email->send();
+	}
+
+	/**
+	 * Check whether a temporary password reset token is valid.
+	 */
+	public function is_password_reset_token_valid($token){
+		return $this->get_password_reset_user($token) !== false;
+	}
+
+	/**
+	 * Set a new password using a temporary, single-use token.
+	 *
+	 * @param string $token Password reset token
+	 * @param string $password New password chosen by the user
+	 * @return bool Password reset fails/succeeds
+	 */
+	public function reset_password($token, $password = ''){
+		if (!is_string($password)
+			|| strlen($password) < $this->config_vars['min']
+			|| strlen($password) > $this->config_vars['max']) {
+			$this->error($this->CI->lang->line('aauth_error_password_invalid'));
+			return false;
+		}
+
+		$row = $this->get_password_reset_user($token);
+		if ($row === false) {
+			$this->error($this->CI->lang->line('aauth_error_vercode_invalid'));
+			return false;
+		}
+
+		$data = array(
+			'verification_code' => '',
+			'forgot_exp' => null,
+			'remember_time' => null,
+			'remember_exp' => null,
+			'pass' => $this->hash_password($password, $row->id),
+		);
+
+		if($this->config_vars['totp_active'] == true AND $this->config_vars['totp_reset_over_reset_password'] == true){
+			$data['totp_secret'] = null;
+		}
+
+		$this->aauth_db->where('id', $row->id);
+		$this->aauth_db->where('verification_code', 'reset:' . hash('sha256', $token));
+		if (!$this->aauth_db->update($this->config_vars['users'], $data)) {
+			return false;
+		}
+
+		return $this->aauth_db->affected_rows() === 1;
+	}
+
+	/**
+	 * Return the user associated with an unexpired reset token.
+	 *
+	 * @return object|bool
+	 */
+	private function get_password_reset_user($token){
+		if (!is_string($token) || !preg_match('/\A[a-f0-9]{64}\z/D', $token)) {
+			return false;
+		}
+
+		$this->aauth_db->where('verification_code', 'reset:' . hash('sha256', $token));
+		$this->aauth_db->where('forgot_exp >=', date('Y-m-d H:i:s'));
+		$this->aauth_db->where('banned', 0);
+		$query = $this->aauth_db->get($this->config_vars['users']);
+
+		return $query->num_rows() > 0 ? $query->row() : false;
 	}
 
 	/**

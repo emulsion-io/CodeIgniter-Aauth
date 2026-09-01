@@ -63,13 +63,14 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |
 |   ['login_with_name']                 Login Identificator, if TRUE username needed to login else email address.
 |
-|   ['email']                           Sender email address, used for remind_password, send_verification and reset_password
-|   ['name']                            Sender name, used for remind_password, send_verification and reset_password
+|   ['email']                           Sender email address, used for remind_password and send_verification
+|   ['name']                            Sender name, used for remind_password and send_verification
 |   ['email_config']                    Array of Config for CI's Email Library
 |
 |   ['verification']                    User Verification, if TRUE sends a verification email on account creation.
 |   ['verification_link']               Link for verification without site_url or base_url
 |   ['reset_password_link']             Link for reset_password without site_url or base_url
+|   ['reset_password_expiration']       Lifetime of a password reset link (PHP relative date format)
 |
 |   ['hash']                            Name of selected hashing algorithm (e.g. "md5", "sha256", "haval160,4", etc..)
 |                                       Please, run hash_algos() for know your all supported algorithms
@@ -146,6 +147,7 @@ $config_aauth["default"] = array(
  'verification'                   => false,
  'verification_link'              => '/account/verification/',
  'reset_password_link'            => '/account/reset_password/',
+ 'reset_password_expiration'      => '+1 hour',
 
  'hash'                           => 'sha256',
  'use_password_hash'              => true,

@@ -105,15 +105,28 @@ class Account extends CI_Controller
 	public function reset_password($verification_code = '')
 	{
 		$success = false;
+		$token_valid = $verification_code !== ''
+			&& $this->aauth->is_password_reset_token_valid($verification_code);
 
-		if ($this->is_post() && $verification_code !== '') {
-			$success = $this->aauth->reset_password($verification_code);
+		if ($this->is_post() && $token_valid) {
+			$password = (string) $this->input->post('password', false);
+			$password_confirmation = (string) $this->input->post('password_confirmation', false);
+
+			if ($password !== $password_confirmation) {
+				$this->aauth->error('Les mots de passe ne correspondent pas.');
+			} else {
+				$success = $this->aauth->reset_password($verification_code, $password);
+				$token_valid = !$success;
+			}
 		}
 
 		$this->render('reset_password', array(
 			'title' => 'Réinitialiser le mot de passe',
 			'verification_code' => $verification_code,
+			'token_valid' => $token_valid,
 			'success' => $success,
+			'password_min' => (int) $this->aauth->config_vars['min'],
+			'password_max' => (int) $this->aauth->config_vars['max'],
 		));
 	}
 
