@@ -42,6 +42,11 @@ them.
    usernames, and IP addresses are not stored in clear text. Existing attempt
    counters are intentionally discarded because they are short-lived state.
 
+7. `07_totp_recovery_codes.sql`
+   Adds the table containing one-time TOTP recovery-code digests. Existing TOTP
+   users receive recovery codes only after reconfiguring TOTP or after the
+   application explicitly calls `generate_totp_recovery_codes()`.
+
 The hardening migration deliberately does not add a foreign key on
 `aauth_pms.sender_id`, because Aauth uses sender ID `0` for system messages.
 

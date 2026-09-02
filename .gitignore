@@ -1,2 +1,5 @@
 # Created by .gitignore support plugin (hsz.mobi)
 .idea/
+demo/test/
+demo/.deploy-*/
+demo/.cache/

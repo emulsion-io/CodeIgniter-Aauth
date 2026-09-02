@@ -12,8 +12,8 @@
 	</div>
 
 	<?php if ($show_totp): ?>
-		<label for="totp_code">Code TOTP <span class="muted">(si demandé)</span></label>
-		<input id="totp_code" name="totp_code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" data-totp>
+		<label for="totp_code">Code TOTP ou code de récupération <span class="muted">(si demandé)</span></label>
+		<input id="totp_code" name="totp_code" type="text" maxlength="24" autocomplete="one-time-code" autocapitalize="characters">
 	<?php endif; ?>
 
 	<?= $captcha ?>

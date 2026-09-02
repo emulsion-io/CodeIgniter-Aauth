@@ -25,8 +25,8 @@ $lang['aauth_error_email_invalid']      = 'Invalid email address';
 $lang['aauth_error_password_invalid']   = 'Invalid password';
 $lang['aauth_error_username_invalid']   = 'Invalid Username';
 $lang['aauth_error_username_required']  = 'Username required';
-$lang['aauth_error_totp_code_required'] = 'Authentication Code required';
-$lang['aauth_error_totp_code_invalid']  = 'Invalid Authentication Code';
+$lang['aauth_error_totp_code_required'] = 'Authentication or recovery code required';
+$lang['aauth_error_totp_code_invalid']  = 'Invalid authentication or recovery code';
 
 // Account update errors
 $lang['aauth_error_update_email_exists']    = 'Email address already exists on the system.  Please enter a different email address.';

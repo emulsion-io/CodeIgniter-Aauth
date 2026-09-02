@@ -33,6 +33,9 @@ migrations before deploying the new library.
 
 #### Security
 
+- TOTP setup now generates printable, copyable one-time recovery codes. Only
+  user-bound SHA-256 digests are stored; successful use consumes a code
+  atomically, and disabling or resetting TOTP removes the remaining codes.
 - Native `password_hash()` is enabled by default. Valid legacy hashes are
   transparently upgraded at the next successful login, and hashes are rehashed
   automatically when the configured algorithm or options change.
@@ -85,6 +88,8 @@ migrations before deploying the new library.
 
 - TOTP provisioning URIs use the standard `otpauth://` format and are rendered
   locally without jQuery.
+- TOTP authentication uses the dedicated second login step by default; the
+  demonstration login form hides its TOTP field in this mode.
 - Changing an account email invalidates its previous verification and sends a
   fresh verification link when verification is enabled.
 - Banning no longer destroys verification state, and verifying an email no
@@ -110,6 +115,7 @@ Back up the database, then follow
 4. `04_schema_preflight.sql` (read-only; every query must return zero rows)
 5. `05_schema_hardening.sql`
 6. `06_login_throttling.sql` (recreates and clears the temporary attempt table)
+7. `07_totp_recovery_codes.sql` (adds hashed one-time TOTP recovery codes)
 
 Fresh installations should use only `sql/Aauth_v3.sql`.
 

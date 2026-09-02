@@ -25,8 +25,8 @@ $lang['aauth_error_email_invalid'] = "Adresse email invalide";
 $lang['aauth_error_password_invalid'] = "Mot de passe invalide";
 $lang['aauth_error_username_invalid'] = "Nom d'utilisateur invalide";
 $lang['aauth_error_username_required'] = "Nom d'utilisateur requis";
-$lang['aauth_error_totp_code_required'] = "Code TOTP requis";
-$lang['aauth_error_totp_code_invalid'] = "Code TOTP invalide";
+$lang['aauth_error_totp_code_required'] = "Code TOTP ou code de récupération requis";
+$lang['aauth_error_totp_code_invalid'] = "Code TOTP ou code de récupération invalide";
 
 
 // Account update errors

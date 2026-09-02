@@ -124,6 +124,7 @@ class Aauth {
 		$this->CI->config->load('aauth');
 		$this->config_vars = $this->CI->config->item('aauth');
 		$this->configure_login_throttling();
+		$this->configure_totp_recovery_codes();
 		$this->captcha_provider = $this->resolve_captcha_provider();
 
 		$this->aauth_db = $this->CI->load->database($this->config_vars['db_profile'], true);
@@ -175,6 +176,18 @@ class Aauth {
 		if ($legacy_enabled !== null) {
 			$this->config_vars['login_throttling'] = $legacy_enabled;
 		}
+	}
+
+	/**
+	 * Supply recovery-code defaults for applications that keep their own config.
+	 */
+	private function configure_totp_recovery_codes() {
+		$defaults = array(
+			'totp_recovery_codes' => 'aauth_totp_recovery_codes',
+			'totp_recovery_code_count' => 10,
+		);
+
+		$this->config_vars = array_merge($defaults, $this->config_vars);
 	}
 	
 	/**
@@ -374,7 +387,7 @@ class Aauth {
 				return false;
 			}
 
-			if (!$this->verify_totp_code($row->totp_secret, $totp_code)) {
+			if (!$this->verify_second_factor_code($row, $totp_code)) {
 				$this->error($this->CI->lang->line('aauth_error_totp_code_invalid'));
 				$this->record_login_failure($throttle_identifier, 'totp');
 				return false;
@@ -410,6 +423,19 @@ class Aauth {
 		$this->CI->load->helper('googleauthenticator');
 		$ga = new PHPGangsta_GoogleAuthenticator();
 		return $ga->verifyCode($secret, (string) $totp_code, 1);
+	}
+
+	/**
+	 * Verify a current TOTP value or consume a one-time recovery code.
+	 */
+	private function verify_second_factor_code($user, $code) {
+		$code = trim((string) $code);
+		if (preg_match('/^[0-9]{6}$/', $code)
+			&& $this->verify_totp_code($user->totp_secret, $code)) {
+			return true;
+		}
+
+		return $this->consume_totp_recovery_code($code, $user->id);
 	}
 
 	/**
@@ -641,11 +667,14 @@ class Aauth {
 			'pass' => $this->hash_password($password, $row->id),
 		);
 
-		if($this->config_vars['totp_active'] == true AND $this->config_vars['totp_reset_over_reset_password'] == true){
+		$reset_totp = $this->config_vars['totp_active'] == true
+			&& $this->config_vars['totp_reset_over_reset_password'] == true;
+		if ($reset_totp) {
 			$data['totp_secret'] = null;
 		}
 
-		if ($generated_password) {
+		$transactional = $generated_password || $reset_totp;
+		if ($transactional) {
 			if (!$this->aauth_db->trans_begin()) {
 				return false;
 			}
@@ -654,20 +683,28 @@ class Aauth {
 		$this->aauth_db->where('id', $row->id);
 		$this->aauth_db->where('verification_code', 'reset:' . hash('sha256', $token));
 		if (!$this->aauth_db->update($this->config_vars['users'], $data)) {
-			if ($generated_password) {
+			if ($transactional) {
 				$this->aauth_db->trans_rollback();
 			}
 			return false;
 		}
 
 		if ($this->aauth_db->affected_rows() !== 1) {
-			if ($generated_password) {
+			if ($transactional) {
 				$this->aauth_db->trans_rollback();
 			}
 			return false;
 		}
 
+		if ($reset_totp && !$this->delete_totp_recovery_codes($row->id)) {
+			$this->aauth_db->trans_rollback();
+			return false;
+		}
+
 		if (!$generated_password) {
+			if ($transactional) {
+				return (bool) $this->aauth_db->trans_commit();
+			}
 			return true;
 		}
 
@@ -1374,6 +1411,10 @@ class Aauth {
 		// delete user vars
 		$this->aauth_db->where('user_id', $user_id);
 		$this->aauth_db->delete($this->config_vars['user_variables']);
+
+		// delete TOTP recovery codes (the foreign key also provides a safety net)
+		$this->aauth_db->where('user_id', $user_id);
+		$this->aauth_db->delete($this->config_vars['totp_recovery_codes']);
 
 		// delete user
 		$this->aauth_db->where('id', $user_id);
@@ -3231,9 +3272,129 @@ class Aauth {
 			$user_id = $this->CI->session->userdata('id');
 
 		$data['totp_secret'] = $secret;
+		$clearing = $secret === '';
+
+		if ($clearing && !$this->aauth_db->trans_begin()) {
+			return false;
+		}
 
 		$this->aauth_db->where('id', $user_id);
-		return $this->aauth_db->update($this->config_vars['users'], $data);
+		if (!$this->aauth_db->update($this->config_vars['users'], $data)) {
+			if ($clearing) {
+				$this->aauth_db->trans_rollback();
+			}
+			return false;
+		}
+
+		if ($clearing && !$this->delete_totp_recovery_codes($user_id)) {
+			$this->aauth_db->trans_rollback();
+			return false;
+		}
+
+		return $clearing ? (bool) $this->aauth_db->trans_commit() : true;
+	}
+
+	/**
+	 * Replace a user's recovery codes and return their one-time clear-text values.
+	 * Only SHA-256 digests are persisted.
+	 *
+	 * @param int|bool $user_id User id, or FALSE for the current user
+	 * @param int|bool $count Number of codes, or FALSE for the configured value
+	 * @return array|bool Clear-text codes, or FALSE on failure
+	 */
+	public function generate_totp_recovery_codes($user_id = false, $count = false) {
+		if ($user_id == false) {
+			$user_id = $this->CI->session->userdata('id');
+		}
+		$user_id = (int) $user_id;
+		$count = $count === false ? (int) $this->config_vars['totp_recovery_code_count'] : (int) $count;
+		if ($user_id < 1 || $count < 1 || $count > 20 || !$this->get_user($user_id)) {
+			return false;
+		}
+
+		$codes = array();
+		$rows = array();
+		for ($i = 0; $i < $count; $i++) {
+			$normalized = strtoupper(bin2hex(random_bytes(10)));
+			$codes[] = implode('-', str_split($normalized, 4));
+			$rows[] = array(
+				'user_id' => $user_id,
+				'code_hash' => $this->hash_totp_recovery_code($normalized, $user_id),
+				'created_at' => date('Y-m-d H:i:s'),
+			);
+		}
+
+		if (!$this->aauth_db->trans_begin()) {
+			return false;
+		}
+		if (!$this->delete_totp_recovery_codes($user_id)
+			|| !$this->aauth_db->insert_batch($this->config_vars['totp_recovery_codes'], $rows)
+			|| $this->aauth_db->trans_status() === false) {
+			$this->aauth_db->trans_rollback();
+			return false;
+		}
+
+		return $this->aauth_db->trans_commit() ? $codes : false;
+	}
+
+	/**
+	 * Atomically consume a recovery code. A successful code cannot be reused.
+	 */
+	public function consume_totp_recovery_code($code, $user_id = false) {
+		if ($user_id == false) {
+			$user_id = $this->CI->session->userdata('id');
+		}
+		$user_id = (int) $user_id;
+		$submitted = strtoupper(trim((string) $code));
+		if ($user_id < 1 || !preg_match('/^[A-F0-9]{4}(?:[ -]?[A-F0-9]{4}){4}$/', $submitted)) {
+			return false;
+		}
+		$normalized = str_replace(array('-', ' '), '', $submitted);
+
+		$this->aauth_db->where('user_id', $user_id);
+		$this->aauth_db->where('code_hash', $this->hash_totp_recovery_code($normalized, $user_id));
+		if (!$this->aauth_db->delete($this->config_vars['totp_recovery_codes'])) {
+			return false;
+		}
+
+		return $this->aauth_db->affected_rows() === 1;
+	}
+
+	/**
+	 * Remove every recovery code belonging to a user.
+	 */
+	public function delete_totp_recovery_codes($user_id = false) {
+		if ($user_id == false) {
+			$user_id = $this->CI->session->userdata('id');
+		}
+		$user_id = (int) $user_id;
+		if ($user_id < 1) {
+			return false;
+		}
+
+		$this->aauth_db->where('user_id', $user_id);
+		return (bool) $this->aauth_db->delete($this->config_vars['totp_recovery_codes']);
+	}
+
+	/**
+	 * Count the recovery codes which are still available.
+	 */
+	public function get_totp_recovery_code_count($user_id = false) {
+		if ($user_id == false) {
+			$user_id = $this->CI->session->userdata('id');
+		}
+		$user_id = (int) $user_id;
+		if ($user_id < 1) {
+			return 0;
+		}
+
+		return (int) $this->aauth_db
+			->where('user_id', $user_id)
+			->count_all_results($this->config_vars['totp_recovery_codes']);
+	}
+
+	private function hash_totp_recovery_code($normalized_code, $user_id) {
+		return hash('sha256', (int) $user_id . ':' . $normalized_code);
 	}
 
 	/**
@@ -3326,7 +3487,7 @@ class Aauth {
 			$this->error($this->CI->lang->line('aauth_error_login_attempts_exceeded'));
 			return false;
 		}
-		if (!$this->verify_totp_code($user->totp_secret, $totp_code)) {
+		if (!$this->verify_second_factor_code($user, $totp_code)) {
 			$this->error($this->CI->lang->line('aauth_error_totp_code_invalid'));
 			$this->record_login_failure($identifier, 'totp');
 			if (!$this->login_attempt_is_allowed($identifier, 'totp')) {

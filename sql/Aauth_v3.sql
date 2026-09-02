@@ -200,6 +200,23 @@ CREATE TABLE `aauth_login_attempts` (
 -- ----------------------------
 
 -- ----------------------------
+-- Table structure for `aauth_totp_recovery_codes`
+-- ----------------------------
+DROP TABLE IF EXISTS `aauth_totp_recovery_codes`;
+CREATE TABLE `aauth_totp_recovery_codes` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) unsigned NOT NULL,
+  `code_hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_aauth_totp_recovery_user_code` (`user_id`,`code_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------
+-- Records of aauth_totp_recovery_codes
+-- ----------------------------
+
+-- ----------------------------
 -- Foreign keys
 -- ----------------------------
 ALTER TABLE `aauth_perm_to_group`
@@ -216,6 +233,9 @@ ALTER TABLE `aauth_user_to_group`
 
 ALTER TABLE `aauth_user_variables`
   ADD CONSTRAINT `fk_aauth_uv_user` FOREIGN KEY (`user_id`) REFERENCES `aauth_users` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `aauth_totp_recovery_codes`
+  ADD CONSTRAINT `fk_aauth_totp_recovery_user` FOREIGN KEY (`user_id`) REFERENCES `aauth_users` (`id`) ON DELETE CASCADE;
 
 ALTER TABLE `aauth_group_to_group`
   ADD CONSTRAINT `fk_aauth_gtg_group` FOREIGN KEY (`group_id`) REFERENCES `aauth_groups` (`id`) ON DELETE CASCADE,

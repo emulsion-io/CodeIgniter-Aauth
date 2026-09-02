@@ -28,6 +28,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |   ['pms']                             The table which contains private messages
 |   ['user_variables']                  The table which contains users variables
 |   ['login_attempts']                  The table which contains login attempts
+|   ['totp_recovery_codes']             The table which contains hashed TOTP recovery codes
 |
 |   ['max']                             Maximum char long for Password
 |   ['min']                             Minimum char long for Password
@@ -59,11 +60,12 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |   ['totp_active']                     Enables the Time-based One-time Password Algorithm
 |   ['totp_only_on_ip_change']          TOTP only on IP Change
 |   ['totp_reset_over_reset_password']  TOTP reset over reset Password
-|   ['totp_two_step_login']             Enables TOTP two step login 
+|   ['totp_two_step_login_active']      Enables the separate TOTP login step
 |   ['totp_two_step_login_redirect']    Redirect path to TOTP Verification page used by control() & is_allowed()
 |   ['totp_issuer']                     Site/service name sent to authenticator applications
 |   ['totp_label']                      TOTP account label; supports {issuer}, {site}, {email}, {username}
 |   ['totp_qr_script']                  Public path to the locally hosted QR renderer
+|   ['totp_recovery_code_count']        Number of one-time recovery codes generated at setup
 |
 |   ['max_login_attempt']               Deprecated legacy limit; NULL uses the separate limits above
 |   ['max_login_attempt_time_period']   Window shared by the IP and identifier counters
@@ -117,6 +119,7 @@ $config_aauth["default"] = array(
  'pms'                            => 'aauth_pms',
  'user_variables'                 => 'aauth_user_variables',
  'login_attempts'                 => 'aauth_login_attempts',
+ 'totp_recovery_codes'            => 'aauth_totp_recovery_codes',
 
  'max'                            => 50,
  'min'                            => 10,
@@ -148,11 +151,12 @@ $config_aauth["default"] = array(
  'totp_active'                    => false,
  'totp_only_on_ip_change'         => false,
  'totp_reset_over_reset_password' => false,
- 'totp_two_step_login_active'     => false,
+ 'totp_two_step_login_active'     => true,
  'totp_two_step_login_redirect'   => '/account/twofactor_verification/',
  'totp_issuer'                    => 'Aauth',
  'totp_label'                     => '{issuer} - {email}',
  'totp_qr_script'                 => 'assets/js/qr-creator.min.js',
+ 'totp_recovery_code_count'       => 10,
 
  'max_login_attempt'              => null,
  'max_login_attempt_time_period'  => "15 minutes",

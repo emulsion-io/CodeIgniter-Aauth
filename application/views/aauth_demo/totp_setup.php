@@ -11,6 +11,25 @@
 	<p class="muted">Scannez le QR code avec votre application d’authentification, puis confirmez avec un premier code.</p>
 <?php endif; ?>
 
+<?php if ($recovery_codes): ?>
+	<section id="recovery-codes-panel" class="recovery-sheet" aria-labelledby="recovery-codes-title">
+		<h2 id="recovery-codes-title">Codes de récupération</h2>
+		<p><strong>Conservez-les maintenant.</strong> Ils ne seront plus affichés. Chaque code remplace une fois le code TOTP, puis devient inutilisable.</p>
+		<ul id="recovery-codes" class="recovery-codes">
+			<?php foreach ($recovery_codes as $recovery_code): ?>
+				<li><?= html_escape($recovery_code) ?></li>
+			<?php endforeach; ?>
+		</ul>
+		<div class="actions no-print">
+			<button type="button" class="secondary" data-copy-recovery>Copier la liste</button>
+			<button type="button" class="secondary" data-print-recovery>Imprimer</button>
+			<span class="muted" data-copy-status role="status" aria-live="polite"></span>
+		</div>
+	</section>
+<?php elseif ($enabled): ?>
+	<p class="muted"><?= (int) $recovery_code_count ?> code<?= $recovery_code_count > 1 ? 's' : '' ?> de récupération encore disponible<?= $recovery_code_count > 1 ? 's' : '' ?>. Leur contenu ne peut pas être réaffiché.</p>
+<?php endif; ?>
+
 <div id="totp-qr" class="qr" data-totp-uri="<?= html_escape($totp_uri) ?>" role="img" aria-label="QR code de configuration TOTP"></div>
 <noscript><p class="alert">JavaScript est nécessaire pour afficher le QR code. Vous pouvez saisir manuellement le secret ci-dessous.</p></noscript>
 <p class="secret"><?= html_escape($secret) ?></p>
@@ -52,5 +71,43 @@
 			background: '#ffffff',
 			size: 200
 		}, target);
+	})();
+
+	(function () {
+		var list = document.getElementById('recovery-codes');
+		if (!list) {
+			return;
+		}
+
+		var codes = Array.prototype.map.call(list.querySelectorAll('li'), function (item) {
+			return item.textContent.trim();
+		}).join('\n');
+		var copyButton = document.querySelector('[data-copy-recovery]');
+		var copyStatus = document.querySelector('[data-copy-status]');
+		copyButton.addEventListener('click', function () {
+			var copied = navigator.clipboard && navigator.clipboard.writeText
+				? navigator.clipboard.writeText(codes)
+				: new Promise(function (resolve, reject) {
+					var field = document.createElement('textarea');
+					field.value = codes;
+					field.setAttribute('readonly', '');
+					field.style.position = 'fixed';
+					field.style.opacity = '0';
+					document.body.appendChild(field);
+					field.select();
+					document.execCommand('copy') ? resolve() : reject();
+					field.remove();
+				});
+
+			copied.then(function () {
+				copyStatus.textContent = 'Liste copiée.';
+			}).catch(function () {
+				copyStatus.textContent = 'Copie impossible : sélectionnez les codes manuellement.';
+			});
+		});
+
+		document.querySelector('[data-print-recovery]').addEventListener('click', function () {
+			window.print();
+		});
 	})();
 </script>

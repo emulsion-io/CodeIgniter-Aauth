@@ -16,7 +16,8 @@ CodeIgniter 2.x is no longer supported.
 
 ## Main features
 
-- Authentication through CodeIgniter sessions, with optional TOTP.
+- Authentication through CodeIgniter sessions, with optional TOTP and
+  single-use recovery codes.
 - Native `password_hash()` support and transparent migration of legacy hashes.
 - Expiring, single-use password-reset and email-verification links.
 - Independent email-verification and account-ban states.
@@ -97,14 +98,22 @@ The views have separate responsibilities:
 - `login.php`: credentials, TOTP field, and CAPTCHA output.
 - `forgot_password.php`: recovery request form.
 - `reset_password.php`: token validation and new-password form.
-- `totp_verify.php`: second-factor form.
-- `totp_setup.php`: local QR rendering, confirmation, and removal.
+- `totp_verify.php`: second-factor or recovery-code form.
+- `totp_setup.php`: local QR rendering, confirmation, printable recovery codes,
+  and removal.
 - `dashboard.php`: authenticated landing page.
 - `message.php`: generic verification/result page.
 
 The demo is an integration reference, not a drop-in production account area.
 Adapt authorization, templates, CSRF policy, messages, redirects, and rate
 limits to the application.
+
+For a disposable local installation, see [demo/demo.md](demo/demo.md). The
+PowerShell deployment script downloads and caches the latest release of the
+compatible CodeIgniter fork, extracts it into `demo/test`, generates the
+`development` configuration, and imports the v3 schema into a dedicated test
+database. It also configures CodeIgniter Email for a local Mailpit SMTP server
+on port 1025.
 
 ## Migrating from Aauth 2.x to 3.x
 
@@ -121,6 +130,7 @@ Run the scripts from `sql/migrations/v2.x-3.x/` once in this order:
 5. Resolve every row reported by the read-only preflight.
 6. `05_schema_hardening.sql`
 7. `06_login_throttling.sql`
+8. `07_totp_recovery_codes.sql`
 
 See the [migration guide](sql/migrations/v2.x-3.x/README.md) for details.
 

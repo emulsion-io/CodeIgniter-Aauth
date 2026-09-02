@@ -272,6 +272,7 @@ default, and can be used once. Verification never removes an account ban.
 'totp_issuer'                  => 'Example site',
 'totp_label'                   => '{issuer} - {email}',
 'totp_qr_script'               => 'assets/js/qr-creator.min.js',
+'totp_recovery_code_count'     => 10,
 ```
 
 The label accepts `{issuer}`, `{site}`, `{email}`, and `{username}`. Generate a
@@ -291,7 +292,19 @@ $authenticator = new PHPGangsta_GoogleAuthenticator();
 
 if ($authenticator->verifyCode($secret, $submittedCode, 1)) {
     $this->aauth->update_user_totp_secret($userId, $secret);
+    $recoveryCodes = $this->aauth->generate_totp_recovery_codes($userId);
 }
+```
+
+Display or export `$recoveryCodes` immediately after generation: Aauth returns
+their clear-text values only once and stores only SHA-256 digests. Generating a
+new list invalidates every previous code. Each code contains 80 random bits and
+is consumed atomically after one successful use.
+
+The remaining count can be displayed without exposing the codes:
+
+```php
+$remaining = $this->aauth->get_totp_recovery_code_count($userId);
 ```
 
 Disable TOTP with:
@@ -299,6 +312,9 @@ Disable TOTP with:
 ```php
 $this->aauth->update_user_totp_secret($userId, '');
 ```
+
+Disabling TOTP also deletes all recovery codes. They are deleted as well when
+`totp_reset_over_reset_password` removes TOTP during a password reset.
 
 ### TOTP login
 
@@ -312,10 +328,18 @@ if ($this->aauth->is_totp_required()) {
     redirect('account/twofactor_verification');
 }
 
-if ($this->aauth->verify_user_totp_code($totpCode)) {
+if ($this->aauth->verify_user_totp_code($totpOrRecoveryCode)) {
     redirect('account');
 }
 ```
+
+Both login modes accept either a current six-digit TOTP value or a recovery
+code. A recovery code is single-use. The separate step is enabled by default.
+After the password has been accepted,
+Aauth stores only the pending user ID in the session and redirects to
+`totp_two_step_login_redirect`; the authenticated session is created only after
+the TOTP code succeeds. Set `totp_two_step_login_active` to `false` only when a
+single form must submit the password and TOTP code together.
 
 ## CAPTCHA providers
 
@@ -572,9 +596,10 @@ Complete defaults and comments are in `application/config/aauth.php`.
 | --- | --- |
 | `totp_active`, `totp_only_on_ip_change` | TOTP activation policy |
 | `totp_reset_over_reset_password` | Remove TOTP during password reset |
-| `totp_two_step_login_active` | Use a separate second-factor page |
+| `totp_two_step_login_active` | Use a separate second-factor page; enabled by default |
 | `totp_two_step_login_redirect` | Second-factor page path |
 | `totp_issuer`, `totp_label`, `totp_qr_script` | Provisioning display and QR asset |
+| `totp_recovery_code_count` | Number of recovery codes generated (1 to 20) |
 | `login_throttling` | Enable application-level brute-force throttling |
 | `login_throttle_identifier_limit`, `login_throttle_ip_limit` | Password limits per identifier and IP |
 | `login_throttle_totp_identifier_limit`, `login_throttle_totp_ip_limit` | TOTP limits per account and IP |
@@ -593,7 +618,8 @@ Complete defaults and comments are in `application/config/aauth.php`.
 
 `db_profile` selects the CodeIgniter database profile. The `users`, `groups`,
 `group_to_group`, `user_to_group`, `perms`, `perm_to_group`, `perm_to_user`,
-`pms`, `user_variables`, and `login_attempts` options customize table names.
+`pms`, `user_variables`, `login_attempts`, and `totp_recovery_codes` options
+customize table names.
 
 `pm_encryption` enables the compatible fork's Encrypt integration;
 `pm_cleanup_max_age` controls scheduled message cleanup.

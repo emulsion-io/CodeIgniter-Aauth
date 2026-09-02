@@ -32,6 +32,16 @@
 		.secret { padding:10px 12px; overflow-wrap:anywhere; border:1px dashed #aeb6c2; border-radius:7px; background:#fafbfc; font-family:ui-monospace,monospace; }
 		.qr { display:flex; align-items:center; justify-content:center; width:200px; height:200px; margin:18px auto; border:1px solid var(--line); }
 		.qr canvas, .qr svg { display:block; max-width:100%; height:auto; }
+		.recovery-sheet { margin:22px 0; padding:16px; border:1px solid #d6b55c; border-radius:8px; background:#fffaf0; }
+		.recovery-sheet h2 { margin-top:0; }
+		.recovery-codes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 28px; margin:16px 0; padding-left:24px; font:650 14px/1.5 ui-monospace,monospace; }
+		@media (max-width:440px) { .recovery-codes { grid-template-columns:1fr; } }
+		@media print {
+			body * { visibility:hidden; }
+			.recovery-sheet,.recovery-sheet * { visibility:visible; }
+			.recovery-sheet { position:absolute; inset:0 auto auto 0; width:100%; border:0; background:#fff; }
+			.no-print { display:none !important; }
+		}
 		.password-wrap { position:relative; }
 		.password-wrap input { padding-right:72px; }
 		.password-toggle { position:absolute; top:5px; right:5px; min-height:34px; padding:6px 9px; background:#eef1f5; color:var(--text); font-size:12px; }

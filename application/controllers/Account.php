@@ -63,7 +63,8 @@ class Account extends CI_Controller
 			'identifier' => $identifier,
 			'identifier_label' => $this->aauth->config_vars['login_with_name'] ? "Nom d'utilisateur" : 'Adresse e-mail',
 			'identifier_type' => $this->aauth->config_vars['login_with_name'] ? 'text' : 'email',
-			'show_totp' => (bool) $this->aauth->config_vars['totp_active'],
+			'show_totp' => (bool) $this->aauth->config_vars['totp_active']
+				&& !$this->aauth->config_vars['totp_two_step_login_active'],
 			'captcha' => $this->aauth->generate_captcha_field($identifier ?: false),
 		));
 	}
@@ -189,11 +190,14 @@ class Account extends CI_Controller
 		}
 
 		if ($this->is_post() && $this->input->post('action') === 'disable') {
-			$this->aauth->update_user_totp_secret($user->id, '');
-			$this->session->unset_userdata('aauth_demo_totp_secret');
-			$this->notice('Double authentification désactivée.');
-			redirect('account/totp_setup');
-			return;
+			if (!$this->aauth->update_user_totp_secret($user->id, '')) {
+				$this->aauth->error('Impossible de désactiver la double authentification.');
+			} else {
+				$this->session->unset_userdata('aauth_demo_totp_secret');
+				$this->notice('Double authentification désactivée.');
+				redirect('account/totp_setup');
+				return;
+			}
 		}
 
 		$secret = $this->session->userdata('aauth_demo_totp_secret');
@@ -208,15 +212,27 @@ class Account extends CI_Controller
 			$authenticator = new PHPGangsta_GoogleAuthenticator();
 
 			if ($authenticator->verifyCode($secret, $code, 1)) {
-				$this->aauth->update_user_totp_secret($user->id, $secret);
-				$this->session->unset_userdata('aauth_demo_totp_secret');
-				$this->notice('Double authentification activée.');
-				redirect('account/totp_setup');
-				return;
-			}
+				$previous_secret = (string) $user->totp_secret;
+				if ($this->aauth->update_user_totp_secret($user->id, $secret)) {
+					$recovery_codes = $this->aauth->generate_totp_recovery_codes($user->id);
+					if (is_array($recovery_codes)) {
+						$this->session->unset_userdata('aauth_demo_totp_secret');
+						$this->session->set_flashdata('aauth_demo_recovery_codes', $recovery_codes);
+						$this->notice('Double authentification activée. Enregistrez maintenant vos codes de récupération.');
+						redirect('account/totp_setup');
+						return;
+					}
 
-			$this->aauth->error('Le code saisi est invalide.');
+					$this->aauth->update_user_totp_secret($user->id, $previous_secret);
+				}
+
+				$this->aauth->error('Impossible de créer les codes de récupération. La configuration TOTP précédente a été conservée.');
+			} else {
+				$this->aauth->error('Le code saisi est invalide.');
+			}
 		}
+
+		$recovery_codes = $this->session->flashdata('aauth_demo_recovery_codes');
 
 		$this->render('totp_setup', array(
 			'title' => 'Configurer le TOTP',
@@ -225,6 +241,8 @@ class Account extends CI_Controller
 			'secret' => $secret,
 			'totp_uri' => $this->aauth->generate_totp_uri($secret, $user->id),
 			'qr_script_url' => base_url($this->aauth->config_vars['totp_qr_script']),
+			'recovery_codes' => is_array($recovery_codes) ? $recovery_codes : array(),
+			'recovery_code_count' => $this->aauth->get_totp_recovery_code_count($user->id),
 		));
 	}
 
