@@ -1,358 +1,148 @@
 <p align="center">
-<img src="https://cloud.githubusercontent.com/assets/2417212/8925689/add409ea-34be-11e5-8e50-845da8f5b1b0.png" height="320">
+  <img src="https://cloud.githubusercontent.com/assets/2417212/8925689/add409ea-34be-11e5-8e50-845da8f5b1b0.png" height="260" alt="Aauth">
 </p>
 
-***
-Aauth is a User Authorization Library for CodeIgniter 3.x, which aims to make easy some essential jobs such as login, permissions and access operations. Despite its ease of use, it has also very advanced features like private messages, groupping, access management, and public access.
+# Aauth 3
+
+Aauth is an authentication and authorization library for CodeIgniter 3.x. It
+provides user accounts, session authentication, email verification, password
+recovery, TOTP, groups, permissions, user variables, private messages, login
+attempt protection, and optional CAPTCHA integration.
+
+Version 3 is a breaking security-focused release. It requires PHP 8.2 or newer,
+targets CodeIgniter 3.x, and is compatible with the
+[pocketarc CodeIgniter fork](https://github.com/pocketarc/codeigniter).
+CodeIgniter 2.x is no longer supported.
+
+## Main features
+
+- Authentication through CodeIgniter sessions, with optional TOTP.
+- Native `password_hash()` support and transparent migration of legacy hashes.
+- Expiring, single-use password-reset and email-verification links.
+- Independent email-verification and account-ban states.
+- User, group, subgroup, and permission management.
+- Google reCAPTCHA or self-hosted [Cap](https://trycap.dev/guide/) CAPTCHA.
+- Per-user variables, private messages, and login-attempt protection.
+- Hardened `utf8mb4` SQL schema with constraints and useful indexes.
+- Minimal controller and views demonstrating the authentication flows.
+
+## Requirements
+
+- PHP 8.2 or newer.
+- CodeIgniter 3.x or the compatible pocketarc fork.
+- MySQL or MariaDB with InnoDB support.
+- A configured CodeIgniter session driver.
+- A configured email service when verification or recovery emails are enabled.
+
+## Fresh installation
+
+1. Copy these files into the matching CodeIgniter application directories:
+
+   - `application/config/aauth.php`
+   - `application/libraries/Aauth.php`
+   - `application/helpers/*`
+   - `application/language/*/aauth_lang.php`
+
+2. Import `sql/Aauth_v3.sql`. This is a fresh-installation schema and drops
+   existing Aauth tables if they already exist.
+
+3. Check `application/config/database.php`, then configure `db_profile`, table
+   names, email, password policy, verification, TOTP, and CAPTCHA in
+   `application/config/aauth.php`.
+
+4. Load the library from a controller or through CodeIgniter autoloading:
+
+   ```php
+   $this->load->library('aauth');
+   ```
+
+5. For local TOTP QR rendering, publish `assets/js/qr-creator.min.js` at the path
+   configured by `totp_qr_script`. Its MIT license is included in
+   `assets/licenses/qr-creator-LICENSE.txt`.
+
+Continue with the [categorized documentation](DOCUMENTATION.md).
+
+## Demonstration controller and views
+
+The optional `application/controllers/Account.php` controller demonstrates the
+browser-facing authentication flow. Its deliberately minimal templates live in
+`application/views/aauth_demo/`; CSS and page-specific JavaScript are inline so
+the example needs no frontend build system.
+
+With standard CodeIgniter routing, the demonstration URLs are:
+
+| URL | Purpose |
+| --- | --- |
+| `/account` | Authenticated account page |
+| `/account/login` | Login and optional CAPTCHA/TOTP |
+| `POST /account/logout` | End the authenticated session |
+| `/account/forgot_password` | Request a reset email |
+| `/account/reset_password/{token}` | Choose a new password |
+| `/account/verification/{user_id}/{token}` | Verify an email address |
+| `/account/twofactor_verification` | Complete two-step TOTP login |
+| `POST /account/cancel_twofactor` | Cancel a pending two-step login |
+| `/account/totp_setup` | Enable or disable TOTP |
+
+The views have separate responsibilities:
+
+- `layout.php`: common layout, inline CSS, and optional QR script.
+- `login.php`: credentials, TOTP field, and CAPTCHA output.
+- `forgot_password.php`: recovery request form.
+- `reset_password.php`: token validation and new-password form.
+- `totp_verify.php`: second-factor form.
+- `totp_setup.php`: local QR rendering, confirmation, and removal.
+- `dashboard.php`: authenticated landing page.
+- `message.php`: generic verification/result page.
+
+The demo is an integration reference, not a drop-in production account area.
+Adapt authorization, templates, CSRF policy, messages, redirects, and rate
+limits to the application.
+
+## Migrating from Aauth 2.x to 3.x
+
+Version 3 contains intentional API and database breaks. Back up the database
+and application first. Do not import `sql/Aauth_v3.sql` over an existing
+installation because it recreates the Aauth tables.
 
-### Version 3
-***
-This version requires PHP 8.2 or newer and is compatible with the [pocketarc CodeIgniter fork](https://github.com/pocketarc/codeigniter).
+Run the scripts from `sql/migrations/v2.x-3.x/` once in this order:
 
-Credits: Simonet Fabrice &lt;fabrice@emulsion.io&gt;
+1. `01_remove_remember_me.sql`
+2. `02_email_verification.sql`
+3. `03_account_states.sql`
+4. `04_schema_preflight.sql`
+5. Resolve every row reported by the read-only preflight.
+6. `05_schema_hardening.sql`
 
-### Minimal authentication demo
-***
-The `Account` controller provides minimal pages for login, password recovery, account verification and TOTP setup. With standard CodeIgniter routing enabled, open `/account/login`.
+See the [migration guide](sql/migrations/v2.x-3.x/README.md) for details.
 
-The default links used by Aauth map to:
+Application changes requiring attention:
 
-* `/account/verification/{user_id}/{code}`
-* `/account/reset_password/{code}`
-* `/account/twofactor_verification`
+- `login()` is now `login($identifier, $password, $totpCode = null)`; the old
+  remember-me argument has been removed.
+- Session lifetime is controlled only by CodeIgniter session configuration.
+- The modern reset call is `reset_password($token, $newPassword)`. The legacy
+  generated-password workflow requires the explicit
+  `password_recovery_mode => generated_password` option.
+- `banned` is replaced by `email_verified_at`, `banned_at`, and `ban_reason`.
+- Existing reset and verification tokens become invalid because v3 stores only
+  hashed tokens and enforces expiration.
+- Resolve duplicates and orphaned relations reported by the SQL preflight
+  before applying the new constraints.
 
-Set `totp_active` to `true` to enforce TOTP for users who configured a secret. Set `totp_two_step_login_active` to `true` to use the dedicated second-factor page.
+Read the [v3.0.0 changelog](CHANGELOG.md#v300-20260902---breaking-release) for
+the complete list of breaking changes.
 
-TOTP QR codes are generated locally in the browser with the bundled `qr-creator` 1.0.0 library. No secret is sent to Google Charts or another QR service. Configure the name displayed by authenticator applications with:
+## Documentation
 
-```php
-'totp_issuer' => 'Nom du site',
-'totp_label'  => '{issuer} - {email}',
-```
+- [Categorized usage and API examples](DOCUMENTATION.md)
+- [Configuration defaults](application/config/aauth.php)
+- [Database migration guide](sql/migrations/v2.x-3.x/README.md)
+- [Version history](CHANGELOG.md)
 
-The label supports `{issuer}`, `{site}`, `{email}` and `{username}`. A custom view can obtain the provisioning URI with:
+## Credits and license
 
-```php
-$uri = $this->aauth->generate_totp_uri($secret, $userId);
-```
+Aauth was created by Emre Akay and is distributed under the GNU Lesser General
+Public License 3.0. Version 3 contributions include Simonet Fabrice
+<fabrice@emulsion.io>.
 
-The local QR renderer is stored at `assets/js/qr-creator.min.js`; its MIT license is included in `assets/licenses/qr-creator-LICENSE.txt`.
-
-### Temporary email verification links
-***
-Email verification links use a random 256-bit token, expire after 24 hours by default and can only be used once. Only an SHA-256 digest of the token is stored in the database.
-
-```php
-'verification_expiration' => '+24 hours',
-```
-
-`send_verification($userId)` sends the link by email. To create it without sending an email, use:
-
-```php
-$link = $this->aauth->create_verification_link($userId);
-```
-
-Existing installations must run `sql/migrations/v2.x-3.x/02_email_verification.sql` once. Verification links generated by older releases are intentionally invalidated because they were stored in plain text and had no enforced expiration.
-
-### Session authentication
-***
-Aauth relies exclusively on the CodeIgniter session. The former persistent "remember me" cookie has been removed. Configure the session lifetime in CodeIgniter according to the application security policy.
-
-The login signature is now:
-
-```php
-$this->aauth->login($identifier, $password, $totpCode);
-```
-
-For an existing database, run `sql/migrations/v2.x-3.x/01_remove_remember_me.sql` once to remove the unused `remember_time` and `remember_exp` columns. New installations using `sql/Aauth_v3.sql` do not contain them.
-
-### Temporary password reset links
-***
-`remind_password($email)` still emails a reset link for backward compatibility. To create the same temporary link without sending an email, use:
-
-```php
-$link = $this->aauth->create_password_reset_link($email);
-```
-
-The caller is then responsible for sharing the link through a trusted channel. Do not display it on a public password-recovery page, as that would let anyone take over an account by entering its email address.
-
-Reset links expire after one hour by default and can only be used once:
-
-```php
-'reset_password_expiration' => '+1 hour',
-```
-
-Only an SHA-256 digest of the random token is stored. In the default and
-recommended mode, the reset form lets the user choose the new password and no
-password is sent by email.
-
-`reset_password()` now receives the token and the new password:
-
-```php
-$success = $this->aauth->reset_password($token, $newPassword);
-```
-
-For temporary compatibility with applications using the former workflow, the
-legacy one-argument call can be enabled explicitly:
-
-```php
-'password_recovery_mode' => 'generated_password',
-
-$success = $this->aauth->reset_password($token);
-```
-
-This generates a cryptographically secure temporary password, changes it in a
-database transaction, and emails it to the account address. If email delivery
-fails, the transaction is rolled back and the reset link remains usable. This
-mode is less secure because email contains a reusable credential; keep `link`
-as the default and migrate legacy controllers when possible.
-
-Reset links created by older releases are intentionally invalidated by this change because they were stored in plain text and had no enforced expiration.
-
-### CAPTCHA providers
-***
-Aauth can use either Google reCAPTCHA or a self-hosted [Cap](https://trycap.dev/guide/) instance. Only one provider can be selected at a time.
-
-For Cap:
-
-```php
-'captcha_provider'      => 'cap',
-'recaptcha_active'      => false,
-'cap_instance_url'      => 'https://cap.example.com',
-'cap_site_key'          => 'your-site-key',
-'cap_secret'            => 'your-site-secret',
-'cap_widget_script_url' => 'https://cdn.jsdelivr.net/npm/cap-widget@0.1.56',
-'cap_widget_mode'       => 'checkbox', // 'checkbox' or 'invisible'
-```
-
-The `invisible` mode starts the Cap challenge when the surrounding form is submitted, adds the resulting `cap-token`, then resumes submission. It displays no checkbox. Keep `checkbox` if you want the visitor to start the challenge explicitly.
-
-For reCAPTCHA:
-
-```php
-'captcha_provider' => 'recaptcha',
-'recaptcha_active' => false,
-'recaptcha_siteKey' => 'your-site-key',
-'recaptcha_secret' => 'your-site-secret',
-```
-
-The legacy `recaptcha_active` option remains supported when `captcha_provider` is `false`. Selecting Cap while that legacy option is enabled raises a configuration error instead of enabling both providers.
-
-**This is Quick Start page. You can also take a look at the [detailed Documentation Wiki](https://github.com/magefly/CodeIgniter-Aauth/wiki) to learn about other great Features**
-
-### Features 
-***
-* User Management and Operations (login, logout, register, verification via e-mail, forgotten password, user ban, login DDoS protection)
-* Group Operations (creating/deleting groups, membership management)
-* Admin and Public Group support (Public permissions)
-* Permission Management (creating/deleting permissions, allow/deny groups, public permissions, permission checking)
-* Group Permissions
-* User Permissions
-* User and System Variables
-* Login DDoS Protection
-* Private Messages (between users)
-* Error Messages and Validations
-* Langugage and config file support
-* Flexible implementation
-
-#### Group membership checks
-
-`is_member()` checks whether the user belongs to at least one supplied group. It accepts a single group, an array, or the legacy pipe-separated syntax:
-
-```php
-$this->aauth->is_member('admin');
-$this->aauth->is_member('admin|editor');
-$this->aauth->is_member(['admin', 'editor']);
-```
-
-The intent can also be made explicit:
-
-```php
-$this->aauth->is_member_of_any(['admin', 'editor']);
-$this->aauth->is_member_of_all(['admin', 'editor']);
-```
-
-### What is new in Version 2
-***
-* User Permissions
-* User and System Variables
-* Login DDoS Protection
-* Updated functions (check documentation for details)
-* Bugs fixes
-* TOTP (Time-based One-time Password)
-
-### Migration
-***
-* If you are currently using Version 1, take a look at the [v1 to v2 migration page.](https://github.com/magefly/CodeIgniter-Aauth/wiki/1%29-Migration-from-V1).
-
-### Quick Start 
-***
-Let's get started :)
-First, we will load the Aauth Library into the system
-```php
-$this->load->library("Aauth");
-```
-
-That was easy!
-
-Now let's create two new users, `Frodo` and `Legolas`.
-
-```php
-$this->aauth->create_user('frodo@example.com','frodopass','FrodoBaggins');
-$this->aauth->create_user('legolas@example.com','legolaspass','Legolas');
-```
-   
-We now we have two users.
-
-OK, now we can create two groups, `hobbits` and `elves`.
-```php
-$this->aauth->create_group('hobbits');
-$this->aauth->create_group('elves');
-```  
-
-Now, let's create a user with power, Gandalf (for our example, let's assume he was given the `id` of 12).
-```php
-$this->aauth->create_user('gandalf@example.com', 'gandalfpass', 'GandalfTheGray');
-```  
-
-OK, now we have two groups and three users.
-
-Let's create two permissions `walk_unseen` and `immortality` 
-
-```php
-$this->aauth->create_perm('walk_unseen');
-$this->aauth->create_perm('immortality');
-```  
-
-Ok, now let's give accesses to our groups.  The Hobbits seem to have ability to walk unseen, so we will assign that privilage to them. The Elves have imortality, so we will assign that privilage to them.
-We will assign access with `allow_group()` function.
-
-```php
-$this->aauth->allow_group('hobbits','walk_unseen');
-$this->aauth->allow_group('elves','immortality');
-  
-  
-$this->aauth->allow_group('hobbits','immortality');
-``` 
-
-Wait a minute! Hobbits should not have `immortality`. We need to fix this, we can use `deny_group()` to remove the permission.
-
-```php
-$this->aauth->deny_group('hobbits','immortality');
-``` 
-
-Gandalf can also live forever.
-
-```php
-$this->aauth->allow_user(12,'immortality');
-``` 
-
-Ok now let's check if Hobbits have `immortality`.
-
-```php
-if($this->aauth->is_group_allowed('hobbits','immortality')){
-	echo "Hobbits are immortal";
-} else {
-	echo "Hobbits are NOT immortal";
-}
-```
-Results:
-```
-Hobbits are NOT immortal
-```
-
-Does Gandalf have the ability to live forever?
-
-```php
-if($this->aauth->is_allowed(12,'immortality')){
-	echo "Gandalf is immortal";
-} else {
-	echo "Gandalf is NOT immortal";
-}
-``` 
-Results:
-```
-Gandalf is immortal
-```
-
-Since we don't accually live in Middle Earth, we are not aware of actual immortality.  Alas, we must delete the permission.
-
-```php
-$this->aauth->delete_perm('immortality');
-``` 
-It is gone.
-
-#### Un-authenticated Users
-
-So, how about un-authenticated users?  In Aauth they are part of the `public` group. Let's give them permissions to `travel`.
-We will assume we already have a permission set up named `travel`.
-
-```php
-$this->aauth->allow_group('public','travel');
-``` 
-
-#### Admin Users
-What about the Admin users? The `Admin` user and any member of the `Admin` group is a superuser who had access everthing, There is no need to grant additional permissions.
-  
-#### User Parameters/Variables
-For each user, variables can be defined as individual key/value pairs.
-
-```php
-$this->aauth->set_user_var("key","value");
-``` 
-
-For example, if you want to store a user's phone number.
-```php
-$this->aauth->set_user_var("phone","1-507-555-1234");
-``` 
-
-To retreive value you will use `get_user_var()`:
-```php
-$this->aauth->get_user_var("key");
-``` 
-
-Aauth also permits you to define System Variables.  These can be which can be accesed by all users in the system.
-```php
-$this->aauth->set_system_var("key","value");
-$this->aauth->get_system_var("key");
-``` 
-
-#### Private Messages
-OK, let's look at private messages. Frodo (`id` = 3) will send a PM to Legolas (`id` = 4);
-
-```php
-$this->aauth->send_pm(3,4,'New cloaks','These new cloaks are fantastic!')
-``` 
-
-#### Banning users
-
-Frodo has broke the rules and will now need to be banned from the system.
-```php
-$this->aauth->ban_user(3, 'Repeated abuse');
-``` 
-
-Email verification and banning are independent account states in v3:
-
-- `email_verified_at` is `NULL` until the address is verified;
-- `banned_at` records when access was suspended;
-- `ban_reason` can store an optional administrative reason.
-
-For an existing installation, run `sql/migrations/v2.x-3.x/03_account_states.sql` once. The
-migration distinguishes legacy accounts awaiting verification from genuinely
-banned accounts before removing the old `banned` flag.
-
-To harden an existing schema, run
-`sql/migrations/v2.x-3.x/04_schema_preflight.sql` and make sure every query
-returns zero rows. Then run `sql/migrations/v2.x-3.x/05_schema_hardening.sql`.
-This adds database-level uniqueness,
-foreign keys with cascading cleanup, query-oriented indexes, and converts the
-tables to `utf8mb4` without silently deleting inconsistent data.
-
-See `sql/migrations/v2.x-3.x/README.md` for the complete upgrade order and a
-description of every migration.
-
-You have reached the end of the Quick Start Guide, but please take a look at the [detailed Documentation Wiki](https://github.com/magefly/CodeIgniter-Aauth/wiki/_pages) for additional information.
-
-
-Don't forget to keep and eye on Aauth, we are constantly improving the system.
-You can also contribute and help me out. :)
+See [LICENSE](LICENSE) for the full license text.
