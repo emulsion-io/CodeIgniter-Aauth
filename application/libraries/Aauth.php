@@ -549,10 +549,16 @@ class Aauth {
 	 * Set a new password using a temporary, single-use token.
 	 *
 	 * @param string $token Password reset token
-	 * @param string $password New password chosen by the user
+	 * @param string|null $password New password chosen by the user, or NULL for
+	 * legacy generated-password mode
 	 * @return bool Password reset fails/succeeds
 	 */
-	public function reset_password($token, $password = ''){
+	public function reset_password($token, $password = null){
+		$generated_password = $password === null && $this->password_recovery_mode() === 'generated_password';
+		if ($generated_password) {
+			$password = $this->generate_temporary_password();
+		}
+
 		if (!is_string($password)
 			|| strlen($password) < $this->config_vars['min']
 			|| strlen($password) > $this->config_vars['max']) {
@@ -576,13 +582,94 @@ class Aauth {
 			$data['totp_secret'] = null;
 		}
 
+		if ($generated_password) {
+			if (!$this->aauth_db->trans_begin()) {
+				return false;
+			}
+		}
+
 		$this->aauth_db->where('id', $row->id);
 		$this->aauth_db->where('verification_code', 'reset:' . hash('sha256', $token));
 		if (!$this->aauth_db->update($this->config_vars['users'], $data)) {
+			if ($generated_password) {
+				$this->aauth_db->trans_rollback();
+			}
 			return false;
 		}
 
-		return $this->aauth_db->affected_rows() === 1;
+		if ($this->aauth_db->affected_rows() !== 1) {
+			if ($generated_password) {
+				$this->aauth_db->trans_rollback();
+			}
+			return false;
+		}
+
+		if (!$generated_password) {
+			return true;
+		}
+
+		if (!$this->send_generated_password($row->email, $password)
+			|| $this->aauth_db->trans_status() === false) {
+			$this->aauth_db->trans_rollback();
+			return false;
+		}
+
+		return (bool) $this->aauth_db->trans_commit();
+	}
+
+	/**
+	 * Return the configured password recovery mode.
+	 */
+	private function password_recovery_mode(){
+		$mode = isset($this->config_vars['password_recovery_mode'])
+			? strtolower(trim((string) $this->config_vars['password_recovery_mode']))
+			: 'link';
+
+		if (!in_array($mode, array('link', 'generated_password'), true)) {
+			throw new InvalidArgumentException('password_recovery_mode must be "link" or "generated_password".');
+		}
+
+		return $mode;
+	}
+
+	/**
+	 * Generate a cryptographically secure temporary password within configured limits.
+	 */
+	private function generate_temporary_password(){
+		$min_length = (int) $this->config_vars['min'];
+		$max_length = (int) $this->config_vars['max'];
+		if ($min_length < 1 || $max_length < $min_length) {
+			throw new InvalidArgumentException('Invalid Aauth password length configuration.');
+		}
+
+		$length = min($max_length, max($min_length, 20));
+		$alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789-_';
+		$password = '';
+		$last_index = strlen($alphabet) - 1;
+		for ($i = 0; $i < $length; $i++) {
+			$password .= $alphabet[random_int(0, $last_index)];
+		}
+
+		return $password;
+	}
+
+	/**
+	 * Send the generated password used by the opt-in legacy recovery mode.
+	 */
+	private function send_generated_password($email, $password){
+		$this->CI->load->library('email');
+		if(isset($this->config_vars['email_config']) && is_array($this->config_vars['email_config'])){
+			$this->CI->email->initialize($this->config_vars['email_config']);
+		}
+
+		$this->CI->email->from($this->config_vars['email'], $this->config_vars['name']);
+		$this->CI->email->to($email);
+		$this->CI->email->subject($this->CI->lang->line('aauth_email_reset_success_subject'));
+		$this->CI->email->message(
+			$this->CI->lang->line('aauth_email_reset_success_new_password') . $password
+		);
+
+		return (bool) $this->CI->email->send();
 	}
 
 	/**

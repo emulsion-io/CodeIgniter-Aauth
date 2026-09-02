@@ -71,6 +71,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |   ['verification_expiration']         Lifetime of an email verification link (PHP relative date format)
 |   ['reset_password_link']             Link for reset_password without site_url or base_url
 |   ['reset_password_expiration']       Lifetime of a password reset link (PHP relative date format)
+|   ['password_recovery_mode']          'link' (recommended) or 'generated_password' for legacy reset_password($token) calls
 |
 |   ['hash']                            Name of selected hashing algorithm (e.g. "md5", "sha256", "haval160,4", etc..)
 |                                       Please, run hash_algos() for know your all supported algorithms
@@ -150,6 +151,7 @@ $config_aauth["default"] = array(
  'verification_expiration'        => '+24 hours',
  'reset_password_link'            => '/account/reset_password/',
  'reset_password_expiration'      => '+1 hour',
+ 'password_recovery_mode'         => 'link',
 
  'hash'                           => 'sha256',
  'use_password_hash'              => true,

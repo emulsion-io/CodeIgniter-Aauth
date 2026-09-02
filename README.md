@@ -82,13 +82,30 @@ Reset links expire after one hour by default and can only be used once:
 'reset_password_expiration' => '+1 hour',
 ```
 
-Only an SHA-256 digest of the random token is stored. The reset form lets the user choose the new password; passwords are no longer generated or sent by email.
+Only an SHA-256 digest of the random token is stored. In the default and
+recommended mode, the reset form lets the user choose the new password and no
+password is sent by email.
 
 `reset_password()` now receives the token and the new password:
 
 ```php
 $success = $this->aauth->reset_password($token, $newPassword);
 ```
+
+For temporary compatibility with applications using the former workflow, the
+legacy one-argument call can be enabled explicitly:
+
+```php
+'password_recovery_mode' => 'generated_password',
+
+$success = $this->aauth->reset_password($token);
+```
+
+This generates a cryptographically secure temporary password, changes it in a
+database transaction, and emails it to the account address. If email delivery
+fails, the transaction is rolled back and the reset link remains usable. This
+mode is less secure because email contains a reusable credential; keep `link`
+as the default and migrate legacy controllers when possible.
 
 Reset links created by older releases are intentionally invalidated by this change because they were stored in plain text and had no enforced expiration.
 

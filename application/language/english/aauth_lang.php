@@ -13,7 +13,7 @@ $lang['aauth_email_reset_subject'] = 'Reset Password';
 $lang['aauth_email_reset_text']    = "To reset your password click on (or copy and paste in your browser address bar) the link below:\n\n";
 
 // Password reset success
-$lang['aauth_email_reset_success_subject']      = 'Successful Pasword Reset';
+$lang['aauth_email_reset_success_subject']      = 'Successful Password Reset';
 $lang['aauth_email_reset_success_new_password'] = 'Your password has successfully been reset. Your new password is : ';
 
 /* Error Messages */
