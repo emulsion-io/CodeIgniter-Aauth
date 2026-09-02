@@ -13,6 +13,7 @@
  * @contributor Simonet Fabrice <fabrice@emulsion.io>
  *
  * @copyright 2014-2018 Emre Akay
+ * @copyright 2026 Simonet Fabrice
  *
  * @version 3
  * @requires PHP 8.2+
@@ -22,6 +23,9 @@
  * @license http://opensource.org/licenses/LGPL-3.0 Lesser GNU Public License
  *
  * The latest version of Aauth can be obtained from:
+ * https://github.com/emulsion-io/CodeIgniter-Aauth
+ * 
+ * Original repository:
  * https://github.com/emreakay/CodeIgniter-Aauth
  *
  */
@@ -78,21 +82,21 @@ class Aauth {
 	 * @access public
 	 * @var object
 	 */
-	 public $aauth_db;
+	public $aauth_db;
 
 	/**
 	 * Array to cache permission-ids.
 	 * @access private
 	 * @var array
 	 */
-	 private $cache_perm_id;
+	private $cache_perm_id;
 
 	/**
 	 * Array to cache group-ids.
 	 * @access private
 	 * @var array
 	 */
-	 private $cache_group_id;
+	private $cache_group_id;
 
 	/**
 	 * Active CAPTCHA provider: recaptcha, cap or FALSE.
@@ -248,6 +252,7 @@ class Aauth {
 	/**
 	 * Login user
 	 * Check provided details against the database. Add items to error array on fail, create session if success
+	 * 
 	 * @param string $identifier
 	 * @param string $pass
 	 * @param string|null $totp_code
@@ -262,7 +267,7 @@ class Aauth {
 			$this->error($this->CI->lang->line('aauth_error_login_attempts_exceeded'));
 			return false;
 		}
- 		if( $this->config_vars['login_with_name'] == true){
+		if( $this->config_vars['login_with_name'] == true){
 
 			if (!$identifier OR !is_string($pass) OR $pass === '')
 			{
@@ -270,7 +275,7 @@ class Aauth {
 				return false;
 			}
 			$db_identifier = 'username';
- 		}else{
+		}else{
 			$this->CI->load->helper('email');
 			if (!valid_email($identifier) OR !is_string($pass) OR $pass === '')
 			{
@@ -278,7 +283,7 @@ class Aauth {
 				return false;
 			}
 			$db_identifier = 'email';
- 		}
+		}
 
 		// An unverified email is an account state of its own, not a ban.
 		$query = null;
@@ -343,6 +348,9 @@ class Aauth {
 
 	/**
 	 * Determine whether a user must provide a TOTP code for this login.
+	 * 
+	 * @param object $user The user object.
+	 * @return bool True if the user must provide a TOTP code, false otherwise.
 	 */
 	private function user_requires_totp($user) {
 		if (!$this->config_vars['totp_active'] || empty($user->totp_secret)) {
@@ -355,6 +363,10 @@ class Aauth {
 
 	/**
 	 * Verify a TOTP code against a secret.
+	 * 
+	 * @param string $secret The TOTP secret.
+	 * @param string $totp_code The TOTP code to verify.
+	 * @return bool True if the code is valid, false otherwise.
 	 */
 	private function verify_totp_code($secret, $totp_code) {
 		$this->CI->load->helper('googleauthenticator');
@@ -364,6 +376,9 @@ class Aauth {
 
 	/**
 	 * Create the authenticated session.
+	 * 
+	 * @param object $user The user object.
+	 * @return bool True on successful login.
 	 */
 	private function complete_login($user) {
 		$this->CI->session->sess_regenerate(true);
@@ -389,6 +404,7 @@ class Aauth {
 	/**
 	 * Check user login
 	 * Checks if the CodeIgniter session is authenticated.
+	 * 
 	 * @return bool
 	 */
 	public function is_loggedin() {
@@ -443,6 +459,7 @@ class Aauth {
 	/**
 	 * Logout user
 	 * Destroys the CodeIgniter session.
+	 * 
 	 * @return bool If session destroy successful
 	 */
 	public function logout() {
@@ -452,6 +469,7 @@ class Aauth {
 	/**
 	 * Reset last login attempts
 	 * Removes a Login Attempt
+	 * 
 	 * @return bool Reset fails/succeeds
 	 */
 	public function reset_login_attempts() {
@@ -540,6 +558,9 @@ class Aauth {
 
 	/**
 	 * Check whether a temporary password reset token is valid.
+	 * 
+	 * @param string $token Password reset token
+	 * @return bool True if the token is valid, false otherwise.
 	 */
 	public function is_password_reset_token_valid($token){
 		return $this->get_password_reset_user($token) !== false;
@@ -655,6 +676,10 @@ class Aauth {
 
 	/**
 	 * Send the generated password used by the opt-in legacy recovery mode.
+	 * 
+	 * @param string $email The recipient's email address.
+	 * @param string $password The generated temporary password.
+	 * @return bool True if the email was sent successfully, false otherwise.
 	 */
 	private function send_generated_password($email, $password){
 		$this->CI->load->library('email');
@@ -675,6 +700,7 @@ class Aauth {
 	/**
 	 * Return the user associated with an unexpired reset token.
 	 *
+	 * @param string $token The password reset token.
 	 * @return object|bool
 	 */
 	private function get_password_reset_user($token){
@@ -694,6 +720,7 @@ class Aauth {
 	/**
 	 * Update last login
 	 * Update user's last login date
+	 * 
 	 * @param int|bool $user_id User id to update or FALSE for current user
 	 * @return bool Update fails/succeeds
 	 */
@@ -712,6 +739,7 @@ class Aauth {
 
 	/**
 	 * Update login attempt and if exceeds return FALSE
+	 * 
 	 * @return bool
 	 */
 	public function update_login_attempts() {
@@ -750,6 +778,7 @@ class Aauth {
 
 	/**
 	 * Get login attempt
+	 * 
 	 * @return int
 	 */
 	public function get_login_attempts() {
@@ -777,6 +806,7 @@ class Aauth {
 	/**
 	 * Create user
 	 * Creates a new user
+	 * 
 	 * @param string $email User's email address
 	 * @param string $pass User's password
 	 * @param string $username User's username
@@ -857,10 +887,11 @@ class Aauth {
 	/**
 	 * Update user
 	 * Updates existing user details
+	 * 
 	 * @param int $user_id User id to update
 	 * @param string|bool $email User's email address, or FALSE if not to be updated
 	 * @param string|bool $pass User's password, or FALSE if not to be updated
-	 * @param string|bool $name User's name, or FALSE if not to be updated
+	 * @param string|bool $username User's name, or FALSE if not to be updated
 	 * @return bool Update fails/succeeds
 	 */
 	public function update_user($user_id, $email = false, $pass = false, $username = false) {
@@ -1215,7 +1246,7 @@ class Aauth {
 	/**
 	 * user_exist_by_username
 	 * Check if user exist by username
-	 * @param $user_id
+	 * @param string $name Username to check
 	 *
 	 * @return bool
 	 */
@@ -1233,7 +1264,7 @@ class Aauth {
 	/**
 	 * user_exist_by_name !DEPRECATED!
 	 * Check if user exist by name
-	 * @param $user_id
+	 * @param string $name Username to check
 	 *
 	 * @return bool
 	 */
@@ -1243,8 +1274,9 @@ class Aauth {
 
 	/**
 	 * user_exist_by_email
-	 * Check if user exist by user email
-	 * @param $user_email
+	 * Check if a user exists by their email address.
+	 * 
+	 * @param string $user_email The email address to check.
 	 *
 	 * @return bool
 	 */
@@ -1261,8 +1293,9 @@ class Aauth {
 
 	/**
 	 * user_exist_by_id
-	 * Check if user exist by user email
-	 * @param $user_email
+	 * Check if user exist by user id
+	 * 
+	 * @param int $user_id
 	 *
 	 * @return bool
 	 */
@@ -1279,7 +1312,9 @@ class Aauth {
 
 	/**
 	 * Get user id
-	 * Get user id from email address, if par. not given, return current user's id
+	 * Get user id from email address,
+	 * If no email is provided, the current user's ID will be returned.
+	 * 
 	 * @param string|bool $email Email address for user
 	 * @return int User id
 	 */
@@ -1303,6 +1338,7 @@ class Aauth {
 	/**
 	 * Get user groups
 	 * Get groups a user is in
+	 * 
 	 * @param int|bool $user_id User id to get or FALSE for current user
 	 * @return array Groups
 	 */
@@ -1344,6 +1380,7 @@ class Aauth {
 	/**
 	 * Update activity
 	 * Update user's last activity date
+	 * 
 	 * @param int|bool $user_id User id to update or FALSE for current user
 	 * @return bool Update fails/succeeds
 	 */
@@ -1364,8 +1401,9 @@ class Aauth {
 	 * Hash password
 	 * Hash the password for storage in the database
 	 * (thanks to Jacob Tomlinson for contribution)
+	 * 
 	 * @param string $pass Password to hash
-	 * @param $userid
+	 * @param int $userid User id required for legacy hash salting.
 	 * @return string Hashed password
 	 */
 	function hash_password($pass, $userid) {
@@ -1427,6 +1465,7 @@ class Aauth {
 	/**
 	 * Create group
 	 * Creates a new group
+	 * 
 	 * @param string $group_name New group name
 	 * @param string $definition Description of the group
 	 * @return int|bool Group id or FALSE on fail
@@ -1453,7 +1492,8 @@ class Aauth {
 	/**
 	 * Update group
 	 * Change a groups name
-	 * @param int $group_id Group id to update
+	 * 
+	 * @param int|string $group_par Group id or name to update
 	 * @param string $group_name New group name
 	 * @return bool Update success/failure
 	 */
@@ -1485,7 +1525,8 @@ class Aauth {
 	/**
 	 * Delete group
 	 * Delete a group from database. WARNING Can't be undone
-	 * @param int $group_id User id to delete
+	 * 
+	 * @param int|string $group_par Group id or name to delete
 	 * @return bool Delete success/failure
 	 */
 	public function delete_group($group_par) {
@@ -1531,6 +1572,7 @@ class Aauth {
 	/**
 	 * Add member
 	 * Add a user to a group
+	 * 
 	 * @param int $user_id User id to add to group
 	 * @param int|string $group_par Group id or name to add user to
 	 * @return bool Add success/failure
@@ -1564,6 +1606,7 @@ class Aauth {
 	/**
 	 * Remove member
 	 * Remove a user from a group
+	 * 
 	 * @param int $user_id User id to remove from group
 	 * @param int|string $group_par Group id or name to remove user from
 	 * @return bool Remove success/failure
@@ -1579,8 +1622,9 @@ class Aauth {
 	/**
 	 * Add subgroup
 	 * Add a subgroup to a group
-	 * @param int $user_id User id to add to group
-	 * @param int|string $group_par Group id or name to add user to
+	 * 
+	 * @param int|string $group_par Group id or name to add the subgroup to
+	 * @param int|string $subgroup_par Sub-Group id or name to add to the group.
 	 * @return bool Add success/failure
 	 */
 	public function add_subgroup($group_par, $subgroup_par) {
@@ -1598,21 +1642,21 @@ class Aauth {
 			return false;
 		}
 
-        if ($group_groups = $this->get_subgroups($group_id)) {
-            foreach ($group_groups as $item) {
-                if ($item->subgroup_id == $subgroup_id) {
-                    return false;
-                }
-            }
-        }
+		if ($group_groups = $this->get_subgroups($group_id)) {
+			foreach ($group_groups as $item) {
+					if ($item->subgroup_id == $subgroup_id) {
+						return false;
+					}
+			}
+		}
 
-        if ($subgroup_groups = $this->get_subgroups($subgroup_id)) {
-            foreach ($subgroup_groups as $item) {
-                if ($item->subgroup_id == $group_id) {
-                    return false;
-                }
-            }
-        }
+		if ($subgroup_groups = $this->get_subgroups($subgroup_id)) {
+			foreach ($subgroup_groups as $item) {
+					if ($item->subgroup_id == $group_id) {
+						return false;
+					}
+			}
+		}
 
 		$query = $this->aauth_db->where('group_id',$group_id);
 		$query = $this->aauth_db->where('subgroup_id',$subgroup_id);
@@ -1633,6 +1677,7 @@ class Aauth {
 	/**
 	 * Remove subgroup
 	 * Remove a subgroup from a group
+	 * 
 	 * @param int|string $group_par Group id or name to remove
 	 * @param int|string $subgroup_par Sub-Group id or name to remove
 	 * @return bool Remove success/failure
@@ -1649,6 +1694,7 @@ class Aauth {
 	/**
 	 * Remove member
 	 * Remove a user from all groups
+	 * 
 	 * @param int $user_id User id to remove from all groups
 	 * @return bool Remove success/failure
 	 */
@@ -1770,6 +1816,7 @@ class Aauth {
 	/**
 	 * Is admin
 	 * Check if current user is a member of the admin group
+	 * 
 	 * @param int $user_id User id to check, if it is not given checks current user
 	 * @return bool
 	 */
@@ -1781,6 +1828,7 @@ class Aauth {
 	/**
 	 * List groups
 	 * List all groups
+	 * 
 	 * @return object Array of groups
 	 */
 	public function list_groups() {
@@ -1793,6 +1841,7 @@ class Aauth {
 	/**
 	 * Get group name
 	 * Get group name from group id
+	 * 
 	 * @param int $group_id Group id to get
 	 * @return string Group name
 	 */
@@ -1811,6 +1860,7 @@ class Aauth {
 	/**
 	 * Get group id
 	 * Get group id from group name or id ( ! Case sensitive)
+	 * 
 	 * @param int|string $group_par Group id or name to get
 	 * @return int Group id
 	 */
@@ -1831,8 +1881,9 @@ class Aauth {
 	/**
 	 * Get group
 	 * Get group from group name or id ( ! Case sensitive)
+	 * 
 	 * @param int|string $group_par Group id or name to get
-	 * @return int Group id
+	 * @return object Group object
 	 */
 	public function get_group ( $group_par ) {
 		if ($group_id = $this->get_group_id($group_par)) {
@@ -1848,8 +1899,9 @@ class Aauth {
 	/**
 	 * Get group permissions
 	 * Get group permissions from group name or id ( ! Case sensitive)
+	 * 
 	 * @param int|string $group_par Group id or name to get
-	 * @return int Group id
+	 * @return object Array of permissions for the group
 	 */
 	public function get_group_perms ( $group_par ) {
 		if ($group_id = $this->get_group_id($group_par)) {
@@ -1867,6 +1919,7 @@ class Aauth {
 	/**
 	 * Get subgroups
 	 * Get subgroups from group name or id ( ! Case sensitive)
+	 * 
 	 * @param int|string $group_par Group id or name to get
 	 * @return object Array of subgroup_id's
 	 */
@@ -1891,6 +1944,7 @@ class Aauth {
 	/**
 	 * Create permission
 	 * Creates a new permission type
+	 * 
 	 * @param string $perm_name New permission name
 	 * @param string $definition Permission description
 	 * @return int|bool Permission id or FALSE on fail
@@ -1916,6 +1970,7 @@ class Aauth {
 	/**
 	 * Update permission
 	 * Updates permission name and description
+	 * 
 	 * @param int|string $perm_par Permission id or permission name
 	 * @param string $perm_name New permission name
 	 * @param string $definition Permission description
@@ -1924,6 +1979,7 @@ class Aauth {
 	public function update_perm($perm_par, $perm_name=false, $definition=false) {
 
 		$perm_id = $this->get_perm_id($perm_par);
+		$data = array();
 
 		if ($perm_name != false)
 			$data['name'] = $perm_name;
@@ -1939,6 +1995,7 @@ class Aauth {
 	/**
 	 * Delete permission
 	 * Delete a permission from database. WARNING Can't be undone
+	 * 
 	 * @param int|string $perm_par Permission id or perm name to delete
 	 * @return bool Delete success/failure
 	 */
@@ -1974,6 +2031,7 @@ class Aauth {
 	/**
 	 * List Group Permissions
 	 * List all permissions by Group
+	 * 
  	 * @param int $group_par Group id or name to check
 	 * @return object Array of permissions
 	 */
@@ -2000,6 +2058,7 @@ class Aauth {
 	 * Is user allowed
 	 * Check if user allowed to do specified action, admin always allowed
 	 * first checks user permissions then check group permissions
+	 * 
 	 * @param int $perm_par Permission id or name to check
 	 * @param int|bool $user_id User id to check, or if FALSE checks current user
 	 * @return bool
@@ -2031,7 +2090,7 @@ class Aauth {
 		$query = $this->aauth_db->get( $this->config_vars['perm_to_user'] );
 
 		if( $query->num_rows() > 0){
-		    return true;
+			return true;
 		} else {
 			$g_allowed=false;
 			foreach( $this->get_user_groups($user_id) as $group ){
@@ -2041,12 +2100,13 @@ class Aauth {
 				}
 			}
 			return $g_allowed;
-	    }
+		}
 	}
 
 	/**
 	 * Is Group allowed
 	 * Check if group is allowed to do specified action, admin always allowed
+	 * 
 	 * @param int $perm_par Permission id or name to check
 	 * @param int|string|bool $group_par Group id or name to check, or if FALSE checks all user groups
 	 * @return bool
@@ -2106,6 +2166,7 @@ class Aauth {
 	/**
 	 * Allow User
 	 * Add User to permission
+	 * 
 	 * @param int $user_id User id to deny
 	 * @param int $perm_par Permission id or name to allow
 	 * @return bool Allow success/failure
@@ -2138,6 +2199,7 @@ class Aauth {
 	/**
 	 * Deny User
 	 * Remove user from permission
+	 * 
 	 * @param int $user_id User id to deny
 	 * @param int $perm_par Permission id or name to deny
 	 * @return bool Deny success/failure
@@ -2155,6 +2217,7 @@ class Aauth {
 	/**
 	 * Allow Group
 	 * Add group to permission
+	 * 
 	 * @param int|string|bool $group_par Group id or name to allow
 	 * @param int $perm_par Permission id or name to allow
 	 * @return bool Allow success/failure
@@ -2193,6 +2256,7 @@ class Aauth {
 	/**
 	 * Deny Group
 	 * Remove group from permission
+	 * 
 	 * @param int|string|bool $group_par Group id or name to deny
 	 * @param int $perm_par Permission id or name to deny
 	 * @return bool Deny success/failure
@@ -2211,6 +2275,7 @@ class Aauth {
 	/**
 	 * List Permissions
 	 * List all permissions
+	 * 
 	 * @return object Array of permissions
 	 */
 	public function list_perms() {
@@ -2222,6 +2287,7 @@ class Aauth {
 	/**
 	 * Get permission id
 	 * Get permission id from permisison name or id
+	 * 
 	 * @param int|string $perm_par Permission id or name to get
 	 * @return int Permission id or NULL if perm does not exist
 	 */
@@ -2242,6 +2308,7 @@ class Aauth {
 	/**
 	 * Get permission
 	 * Get permission from permisison name or id
+	 * 
 	 * @param int|string $perm_par Permission id or name to get
 	 * @return int Permission id or NULL if perm does not exist
 	 */
@@ -2263,6 +2330,7 @@ class Aauth {
 	/**
 	 * Send Private Message
 	 * Send a private message to another user
+	 * 
 	 * @param int $sender_id User id of private message sender
 	 * @param int $receiver_id User id of private message receiver
 	 * @param string $title Message title/subject
@@ -2303,6 +2371,7 @@ class Aauth {
 	/**
 	 * Send multiple Private Messages
 	 * Send multiple private messages to another users
+	 * 
 	 * @param int $sender_id User id of private message sender
 	 * @param array $receiver_ids Array of User ids of private message receiver
 	 * @param string $title Message title/subject
@@ -2356,6 +2425,7 @@ class Aauth {
 	/**
 	 * List Private Messages
 	 * If receiver id not given retruns current user's pms, if sender_id given, it returns only pms from given sender
+	 * 
 	 * @param int $limit Number of private messages to be returned
 	 * @param int $offset Offset for private messages to be returned (for pagination)
 	 * @param int $sender_id User id of private message sender
@@ -2396,6 +2466,7 @@ class Aauth {
 	/**
 	 * Get Private Message
 	 * Get private message by id
+	 * 
 	 * @param int $pm_id Private message id to be returned
 	 * @param int $user_id User ID of Sender or Receiver
 	 * @param bool $set_as_read Whether or not to mark message as read
@@ -2440,6 +2511,7 @@ class Aauth {
 	/**
 	 * Delete Private Message
 	 * Delete private message by id
+	 * 
 	 * @param int $pm_id Private message id to be deleted
 	 * @return bool Delete success/failure
 	 */
@@ -2494,6 +2566,7 @@ class Aauth {
 	/**
 	 * Count unread Private Message
 	 * Count number of unread private messages
+	 * 
 	 * @param int|bool $receiver_id User id for message receiver, if FALSE returns for current user
 	 * @return int Number of unread messages
 	 */
@@ -2514,6 +2587,7 @@ class Aauth {
 	/**
 	 * Set Private Message as read
 	 * Set private message as read
+	 * 
 	 * @param int $pm_id Private message id to mark as read
 	 * @param int|bool $user_id Receiver id, or FALSE for the current user
 	 * @return bool Update success/failure
@@ -2543,6 +2617,7 @@ class Aauth {
 	/**
 	 * Error
 	 * Add message to error array and set flash data
+	 * 
 	 * @param string $message Message to add to array
 	 * @param boolean $flashdata if TRUE add $message to CI flashdata (deflault: FALSE)
 	 */
@@ -2562,6 +2637,7 @@ class Aauth {
 	 * flashdata list.  This should be called last in your controller, and with care as it could continue
 	 * to revive all errors and not let them expire as intended.
 	 * Benefitial when using Ajax Requests
+	 * 
 	 * @see http://ellislab.com/codeigniter/user-guide/libraries/sessions.html
 	 * @param boolean $include_non_flash TRUE if it should stow basic errors as flashdata (default = FALSE)
 	 */
@@ -2581,6 +2657,7 @@ class Aauth {
 	/**
 	 * Get Errors Array
 	 * Return array of errors
+	 * 
 	 * @return array Array of messages, empty array if no errors
 	 */
 	public function get_errors_array()
@@ -2592,6 +2669,7 @@ class Aauth {
 	 * Print Errors
 	 *
 	 * Prints string of errors separated by delimiter
+	 * 
 	 * @param string $divider Separator for errors
 	 */
 	public function print_errors($divider = '<br />')
@@ -2648,6 +2726,7 @@ class Aauth {
 	 * flashdata list.  This should be called last in your controller, and with care as it could continue
 	 * to revive all infos and not let them expire as intended.
 	 * Benefitial by using Ajax Requests
+	 * 
 	 * @see http://ellislab.com/codeigniter/user-guide/libraries/sessions.html
 	 * @param boolean $include_non_flash TRUE if it should stow basic infos as flashdata (default = FALSE)
 	 */
@@ -2668,6 +2747,7 @@ class Aauth {
 	 * Get Info Array
 	 *
 	 * Return array of infos
+	 * 
 	 * @return array Array of messages, empty array if no errors
 	 */
 	public function get_infos_array()
@@ -2680,6 +2760,7 @@ class Aauth {
 	 * Print Info
 	 *
 	 * Print string of info separated by delimiter
+	 * 
 	 * @param string $divider Separator for info
 	 *
 	 */
@@ -2721,6 +2802,7 @@ class Aauth {
 	 * Set User Variable as key value
 	 * if variable not set before, it will ve set
 	 * if set, overwrites the value
+	 * 
 	 * @param string $key
 	 * @param string $value
 	 * @param int $user_id ; if not given current user
@@ -2738,7 +2820,7 @@ class Aauth {
 		}
 
 		// if var not set, set
-		 if ($this->get_user_var($key,$user_id) ===false) {
+		if ($this->get_user_var($key,$user_id) ===false) {
 
 			$data = array(
 				'data_key' => $key,
@@ -2766,6 +2848,7 @@ class Aauth {
 
 	/**
 	 * Unset User Variable as key value
+	 * 
 	 * @param string $key
 	 * @param int $user_id ; if not given current user
 	 * @return bool
@@ -2790,6 +2873,7 @@ class Aauth {
 	/**
 	 * Get User Variable by key
 	 * Return string of variable value or FALSE
+	 * 
 	 * @param string $key
 	 * @param int $user_id ; if not given current user
 	 * @return bool|string , FALSE if var is not set, the value of var if set
@@ -2822,7 +2906,7 @@ class Aauth {
 	}
 
 
-    /**
+	/**
 	 * Get User Variables by user id
 	 * Return array with all user keys & variables
 	 * @param int $user_id ; if not given current user
@@ -2852,6 +2936,7 @@ class Aauth {
 	/**
 	 * List User Variable Keys by UserID
 	 * Return array of variable keys or FALSE
+	 * 
 	 * @param int $user_id ; if not given current user
 	 * @return bool|array, FALSE if no user vars, otherwise array
 	 */
@@ -2878,6 +2963,11 @@ class Aauth {
 		}
 	}
 
+	/**
+	 * Generate the CAPTCHA field HTML.
+	 *
+	 * @return string HTML for the CAPTCHA field, or an empty string if CAPTCHA is not required.
+	 */
 	public function generate_captcha_field(){
 		if (!$this->captcha_is_required()) {
 			return '';
@@ -2912,6 +3002,13 @@ class Aauth {
 		return $this->generate_captcha_field();
 	}
 
+	/**
+	 * Update the TOTP secret for a user.
+	 *
+	 * @param int|bool $user_id User id, or FALSE for the current user
+	 * @param string|null $secret The new TOTP secret
+	 * @return bool TRUE on success, FALSE on failure
+	 */
 	public function update_user_totp_secret($user_id = false, $secret = NULL) {
 
 		if ($secret === NULL) {
@@ -2927,6 +3024,11 @@ class Aauth {
 		return $this->aauth_db->update($this->config_vars['users'], $data);
 	}
 
+	/**
+	 * Generate a unique TOTP secret for a user.
+	 *
+	 * @return string The generated TOTP secret
+	 */
 	public function generate_unique_totp_secret(){
 		$this->CI->load->helper('googleauthenticator');
 		$ga = new PHPGangsta_GoogleAuthenticator();
@@ -2975,6 +3077,13 @@ class Aauth {
 		return $ga->getOtpAuthUrl($label, $secret, $issuer);
 	}
 
+	/**
+	 * Verify the TOTP code for a user.
+	 *
+	 * @param string $totp_code The TOTP code to verify
+	 * @param int|bool $user_id User id, or FALSE for the current user
+	 * @return bool TRUE if the TOTP code is valid, FALSE otherwise
+	 */
 	public function verify_user_totp_code($totp_code, $user_id = false){
 		if ( !$this->is_totp_required()) {
 			return true;
@@ -3008,6 +3117,11 @@ class Aauth {
 		return $this->complete_login($user);
 	}
 
+	/**
+	 * Check if TOTP is required for the current session.
+	 *
+	 * @return bool TRUE if TOTP is required, FALSE otherwise
+	 */
 	public function is_totp_required(){
 		return (bool) $this->CI->session->userdata('totp_required');
 	}
