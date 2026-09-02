@@ -89,7 +89,12 @@ migrations before deploying the new library.
 - TOTP provisioning URIs use the standard `otpauth://` format and are rendered
   locally without jQuery.
 - Invisible Cap supports the widget package's default, named, and
-  browser-global programmatic API exports.
+  browser-global programmatic API exports. It preloads the challenge, appends
+  the generated hidden token to the form, retries on submit when necessary,
+  and uses one native submission instead of redispatching `submit`.
+- Cap server verification prefers cURL, validates the HTTP status and JSON
+  response strictly, and logs sanitized failure codes without credentials. On
+  Windows it uses cURL's native CA store when available.
 - TOTP authentication uses the dedicated second login step by default; the
   demonstration login form hides its TOTP field in this mode.
 - Changing an account email invalidates its previous verification and sends a

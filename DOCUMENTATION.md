@@ -360,8 +360,17 @@ Cap configuration:
 
 Checkbox mode loads `cap_widget_script_url` as a web component. Invisible mode
 uses Cap's programmatic API from its default, named, or browser-global export.
-The form waits for `solve()`, adds the resulting `cap-token`, and only then
-resumes submission.
+It starts `solve()` while the page is loading and appends the resulting hidden
+`cap-token` to the form. Submission waits for an in-progress solve or retries a
+failed preload, then submits once without dispatching a second JavaScript
+`submit` event.
+
+Server-side verification posts JSON to
+`{cap_instance_url}/{cap_site_key}/siteverify`. The helper prefers PHP cURL and
+falls back to HTTPS streams; transport and HTTP failures are logged without
+logging the submitted token or secret. On Windows, cURL uses the native
+certificate store when supported, avoiding TLS issuer failures in PHP setups
+without a configured `curl.cainfo`.
 
 Google reCAPTCHA configuration:
 

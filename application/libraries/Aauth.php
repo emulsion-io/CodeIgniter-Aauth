@@ -281,6 +281,11 @@ class Aauth {
 		}
 
 		if (!$response->success) {
+			$error_codes = isset($response->errorCodes) ? (array) $response->errorCodes : array('unknown');
+			$error_codes = array_map(function ($code) {
+				return preg_replace('/[^a-zA-Z0-9_.-]/', '', (string) $code);
+			}, $error_codes);
+			log_message('error', 'Aauth CAPTCHA verification failed: ' . implode(', ', $error_codes));
 			$this->error($this->captcha_error_message());
 			return false;
 		}

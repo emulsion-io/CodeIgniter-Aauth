@@ -247,6 +247,7 @@ $config['sess_cookie_name'] = 'aauth_test_session';
 $config['sess_save_path'] = sys_get_temp_dir();
 $config['csrf_protection'] = TRUE;
 $config['csrf_regenerate'] = FALSE;
+$config['log_threshold'] = 1;
 '@
     $configContent = $configTemplate.Replace('{{BASE_URL}}', (ConvertTo-PhpSingleQuoted $BaseUrl))
     $configContent = $configContent.Replace('{{ENCRYPTION_KEY}}', (ConvertTo-PhpSingleQuoted $encryptionKey))
