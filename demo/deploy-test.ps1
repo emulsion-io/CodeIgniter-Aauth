@@ -11,10 +11,17 @@ param(
     [string]$DatabaseName = 'auth_test',
     [string]$MailpitHost = '127.0.0.1',
     [int]$MailpitSmtpPort = 1025,
+    [string]$CapInstanceUrl = $env:AAUTH_DEMO_CAP_INSTANCE_URL,
+    [string]$CapSiteKey = $env:AAUTH_DEMO_CAP_SITE_KEY,
+    [string]$CapSecret = $env:AAUTH_DEMO_CAP_SECRET,
+    [ValidateSet('checkbox', 'invisible')]
+    [string]$CapWidgetMode = 'checkbox',
+    [int]$CaptchaLoginAttempts = 0,
     [string]$BaseUrl = 'http://localhost:8080/',
     [string]$PhpCommand = 'php',
     [switch]$ResetDatabase,
     [switch]$SkipDatabase,
+    [switch]$EnableCapCaptcha,
     [switch]$Force
 )
 
@@ -50,6 +57,14 @@ function New-RandomHex([int]$ByteCount) {
 function Write-Utf8File([string]$Path, [string]$Content) {
     $encoding = New-Object Text.UTF8Encoding($false)
     [IO.File]::WriteAllText($Path, $Content, $encoding)
+}
+
+function Set-AauthConfigValue([string]$Content, [string]$Key, [string]$PhpValue) {
+    $pattern = "(?m)^(\s*'" + [regex]::Escape($Key) + "'\s*=>\s*).*$"
+    return [regex]::Replace($Content, $pattern, {
+        param($match)
+        return $match.Groups[1].Value + $PhpValue + ','
+    })
 }
 
 function Copy-DirectoryContents([string]$Source, [string]$Destination) {
@@ -176,6 +191,28 @@ try {
     Copy-DirectoryContents (Join-Path $repositoryRoot 'application\views\aauth_demo') (Join-Path $target 'application\views\aauth_demo')
     Copy-DirectoryContents (Join-Path $repositoryRoot 'assets') (Join-Path $target 'assets')
     Copy-Item -LiteralPath (Join-Path $demoDirectory 'router.php') -Destination (Join-Path $target 'router.php') -Force
+
+    if ($EnableCapCaptcha) {
+        if ([string]::IsNullOrWhiteSpace($CapInstanceUrl) -or
+            [string]::IsNullOrWhiteSpace($CapSiteKey) -or
+            [string]::IsNullOrWhiteSpace($CapSecret)) {
+            throw 'Cap requiert CapInstanceUrl, CapSiteKey et CapSecret. Les variables AAUTH_DEMO_CAP_* peuvent aussi etre utilisees.'
+        }
+        if ($CaptchaLoginAttempts -lt 0) {
+            throw 'CaptchaLoginAttempts doit etre positif ou nul.'
+        }
+
+        $aauthConfigPath = Join-Path $target 'application\config\aauth.php'
+        $aauthConfig = [IO.File]::ReadAllText($aauthConfigPath)
+        $aauthConfig = Set-AauthConfigValue $aauthConfig 'captcha_provider' (ConvertTo-PhpSingleQuoted 'cap')
+        $aauthConfig = Set-AauthConfigValue $aauthConfig 'recaptcha_active' 'false'
+        $aauthConfig = Set-AauthConfigValue $aauthConfig 'recaptcha_login_attempts' $CaptchaLoginAttempts.ToString()
+        $aauthConfig = Set-AauthConfigValue $aauthConfig 'cap_instance_url' (ConvertTo-PhpSingleQuoted $CapInstanceUrl.TrimEnd('/'))
+        $aauthConfig = Set-AauthConfigValue $aauthConfig 'cap_site_key' (ConvertTo-PhpSingleQuoted $CapSiteKey)
+        $aauthConfig = Set-AauthConfigValue $aauthConfig 'cap_secret' (ConvertTo-PhpSingleQuoted $CapSecret)
+        $aauthConfig = Set-AauthConfigValue $aauthConfig 'cap_widget_mode' (ConvertTo-PhpSingleQuoted $CapWidgetMode)
+        Write-Utf8File $aauthConfigPath $aauthConfig
+    }
 
     $environmentConfigDirectory = Join-Path $target 'application\config\development'
     New-Item -ItemType Directory -Path $environmentConfigDirectory -Force | Out-Null
@@ -307,6 +344,9 @@ $config['validate'] = FALSE;
     Write-Host "Demarrage : cd `"$target`"; `$env:CI_ENV='development'; $PhpCommand -S 127.0.0.1:8080 router.php"
     Write-Host ('Connexion : ' + $BaseUrl + 'account/login')
     Write-Host "SMTP Mailpit : ${MailpitHost}:$MailpitSmtpPort"
+    if ($EnableCapCaptcha) {
+        Write-Host "CAPTCHA Cap : ${CapInstanceUrl} (${CapWidgetMode}, apres ${CaptchaLoginAttempts} echec(s))"
+    }
 }
 finally {
     $temporaryFullPath = [IO.Path]::GetFullPath($temporaryDirectory)

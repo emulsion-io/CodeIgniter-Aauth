@@ -45,6 +45,7 @@
 		.password-wrap { position:relative; }
 		.password-wrap input { padding-right:72px; }
 		.password-toggle { position:absolute; top:5px; right:5px; min-height:34px; padding:6px 9px; background:#eef1f5; color:var(--text); font-size:12px; }
+		.captcha { margin-top:16px; }
 	</style>
 </head>
 <body>

@@ -58,7 +58,7 @@ class CapCaptcha
 		$endpoint = htmlspecialchars($this->siteEndpoint() . '/', ENT_QUOTES, 'UTF-8');
 
 		return '<script type="module" src="' . $scriptUrl . '"></script>'
-			. '<cap-widget data-cap-api-endpoint="' . $endpoint . '"></cap-widget>';
+			. '<cap-widget required data-cap-api-endpoint="' . $endpoint . '"></cap-widget>';
 	}
 
 	/**
@@ -91,7 +91,10 @@ class CapCaptcha
 			. 'solving=true;error.hidden=true;form.setAttribute("aria-busy","true");'
 			. 'var submitter=event.submitter||null;'
 			. 'try{'
-			. 'capPromise=capPromise||import(' . $scriptUrl . ').then(function(module){return new module.default({apiEndpoint:' . $endpoint . '});});'
+			. 'capPromise=capPromise||import(' . $scriptUrl . ').then(function(module){'
+			. 'var CapConstructor=module.default||module.Cap||window.Cap;'
+			. 'if(typeof CapConstructor!=="function"){throw new Error("Cap programmatic API is unavailable");}'
+			. 'return new CapConstructor({apiEndpoint:' . $endpoint . '});});'
 			. 'var cap=await capPromise;var solution=await cap.solve();'
 			. 'if(!solution||!solution.token){throw new Error("Cap returned no token");}'
 			. 'input.value=solution.token;resubmitting=true;'

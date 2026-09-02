@@ -88,6 +88,8 @@ migrations before deploying the new library.
 
 - TOTP provisioning URIs use the standard `otpauth://` format and are rendered
   locally without jQuery.
+- Invisible Cap supports the widget package's default, named, and
+  browser-global programmatic API exports.
 - TOTP authentication uses the dedicated second login step by default; the
   demonstration login form hides its TOTP field in this mode.
 - Changing an account email invalidates its previous verification and sends a

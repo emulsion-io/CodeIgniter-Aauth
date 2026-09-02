@@ -16,7 +16,9 @@
 		<input id="totp_code" name="totp_code" type="text" maxlength="24" autocomplete="one-time-code" autocapitalize="characters">
 	<?php endif; ?>
 
-	<?= $captcha ?>
+	<?php if ($captcha !== ''): ?>
+		<div class="captcha"><?= $captcha ?></div>
+	<?php endif; ?>
 
 	<div class="actions">
 		<button type="submit">Se connecter</button>

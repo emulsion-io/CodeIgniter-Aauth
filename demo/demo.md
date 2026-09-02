@@ -62,6 +62,23 @@ Les paramètres `DatabaseHost`, `DatabasePort`, `DatabaseUser`,
 Le mot de passe SQL est transmis au programme d'import par une variable
 d'environnement temporaire, pas dans la ligne de commande.
 
+## CAPTCHA Cap
+
+La démo peut activer Cap sans inscrire les identifiants dans le dépôt. Définissez
+les trois variables uniquement dans le terminal courant, puis redéployez :
+
+```powershell
+$env:AAUTH_DEMO_CAP_INSTANCE_URL = 'https://cap.example.com/'
+$env:AAUTH_DEMO_CAP_SITE_KEY = 'your-site-key'
+$env:AAUTH_DEMO_CAP_SECRET = 'your-secret-key'
+\.\demo\deploy-test.ps1 -EnableCapCaptcha -SkipDatabase
+```
+
+Le CAPTCHA est alors affiché dès la première tentative afin de faciliter le
+test. Utilisez `-CaptchaLoginAttempts 4` pour retrouver le seuil recommandé en
+usage normal, et `-CapWidgetMode invisible` pour tester le mode transparent.
+La configuration générée reste sous `demo/test`, qui est ignoré par Git.
+
 ## E-mails avec Mailpit
 
 Le script génère `application/config/development/email.php` pour envoyer tous

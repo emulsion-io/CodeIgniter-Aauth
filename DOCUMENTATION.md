@@ -358,6 +358,11 @@ Cap configuration:
 'cap_widget_mode'       => 'invisible', // or 'checkbox'
 ```
 
+Checkbox mode loads `cap_widget_script_url` as a web component. Invisible mode
+uses Cap's programmatic API from its default, named, or browser-global export.
+The form waits for `solve()`, adds the resulting `cap-token`, and only then
+resumes submission.
+
 Google reCAPTCHA configuration:
 
 ```php
