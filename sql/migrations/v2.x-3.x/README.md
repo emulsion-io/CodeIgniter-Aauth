@@ -36,5 +36,15 @@ them.
    254-character email addresses and 45-character IP addresses, and replaces
    undersized numeric flags where appropriate.
 
+6. `06_login_throttling.sql`
+   Recreates the temporary login-attempt table with independent IP and
+   identifier buckets. Bucket keys are HMAC digests, so email addresses,
+   usernames, and IP addresses are not stored in clear text. Existing attempt
+   counters are intentionally discarded because they are short-lived state.
+
 The hardening migration deliberately does not add a foreign key on
 `aauth_pms.sender_id`, because Aauth uses sender ID `0` for system messages.
+
+After migration 06, configure `login_throttle_secret` or ensure CodeIgniter's
+`encryption_key` is set. Changing that secret invalidates existing temporary
+throttle buckets, but does not affect users or password hashes.

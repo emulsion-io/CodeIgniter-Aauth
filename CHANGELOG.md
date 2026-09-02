@@ -50,6 +50,11 @@ migrations before deploying the new library.
   migrated even when an older password no longer meets the current policy.
 - TOTP verification is integrated into the login flow without authenticating
   the session before the second factor succeeds.
+- The former IP-only "DDoS protection" is replaced by atomic, independent
+  per-IP and per-identifier throttling for password and TOTP failures. Bucket
+  keys are stored as HMAC digests and inactive state is cleaned automatically.
+- Login failures use the same public error for missing, unverified, banned, or
+  invalid-credential accounts to reduce account enumeration.
 
 #### Added
 
@@ -73,6 +78,8 @@ migrations before deploying the new library.
 - Optional ban reasons through `ban_user($userId, $reason)` while retaining
   compatibility with `ban_user($userId)`.
 - French messages for the new CAPTCHA and hardened verification flows.
+- `cleanup_login_attempts()` for explicit scheduled cleanup of expired
+  throttling buckets.
 
 #### Changed
 
@@ -102,6 +109,7 @@ Back up the database, then follow
 3. `03_account_states.sql`
 4. `04_schema_preflight.sql` (read-only; every query must return zero rows)
 5. `05_schema_hardening.sql`
+6. `06_login_throttling.sql` (recreates and clears the temporary attempt table)
 
 Fresh installations should use only `sql/Aauth_v3.sql`.
 

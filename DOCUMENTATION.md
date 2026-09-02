@@ -14,6 +14,7 @@ indicated.
 ## Contents
 
 - [Authentication and sessions](#authentication-and-sessions)
+- [Login throttling](#login-throttling)
 - [Users and account states](#users-and-account-states)
 - [Password recovery](#password-recovery)
 - [Email verification](#email-verification)
@@ -65,14 +66,59 @@ public function administration()
 }
 ```
 
-Login-attempt helpers are public, although normal login code does not need to
-call them manually:
+## Login throttling
+
+Aauth limits password and TOTP failures with two independent buckets:
+
+- a lower per-identifier limit protects one account across many source IPs;
+- a higher per-IP limit slows one source testing many accounts without quickly
+  blocking every user behind the same NAT gateway.
+
+The values stored in `aauth_login_attempts` are HMAC digests. Configure a
+dedicated random secret, or let Aauth fall back to CodeIgniter's
+`encryption_key`:
 
 ```php
-$attempts = $this->aauth->get_login_attempts();
-$accepted = $this->aauth->update_login_attempts();
-$cleared = $this->aauth->reset_login_attempts();
+'login_throttling'                        => true,
+'login_throttle_identifier_limit'         => 5,
+'login_throttle_ip_limit'                 => 30,
+'login_throttle_totp_identifier_limit'    => 10,
+'login_throttle_totp_ip_limit'            => 30,
+'max_login_attempt_time_period'           => '15 minutes',
+'login_throttle_lockout_time'             => '15 minutes',
+'login_throttle_secret'                   => 'a-long-random-application-secret',
 ```
+
+Generate the dedicated value once with `bin2hex(random_bytes(32))` and keep it
+outside version control. Throttling fails closed when neither secret is set.
+Configure CodeIgniter's trusted proxy addresses correctly as well, otherwise
+the per-IP bucket may receive the reverse proxy address instead of the client
+address.
+
+Counters use an atomic database upsert, so simultaneous failures do not lose
+increments. A successful authentication clears only that account's identifier
+buckets; it deliberately does not clear the shared IP bucket. Expired buckets
+are removed probabilistically, and can also be cleaned from a scheduled task:
+
+```php
+$this->aauth->cleanup_login_attempts();
+```
+
+This feature is application-level brute-force protection, not DDoS mitigation.
+Use a reverse proxy, web server, or WAF for coarse request-rate limiting before
+requests reach PHP.
+
+Login-attempt helpers remain public for custom authentication flows:
+
+```php
+$attempts = $this->aauth->get_login_attempts($identifier);
+$accepted = $this->aauth->update_login_attempts($identifier);
+$cleared = $this->aauth->reset_login_attempts($identifier);
+```
+
+Calling these helpers without an identifier retains the legacy IP-only helper
+behavior. `ddos_protection` and `max_login_attempt` are deprecated aliases for
+older application configuration files.
 
 ## Users and account states
 
@@ -304,7 +350,7 @@ Render the selected provider inside the login form:
 
 ```php
 echo form_open('account/login');
-echo $this->aauth->generate_captcha_field();
+echo $this->aauth->generate_captcha_field($identifier);
 echo form_submit('login', 'Sign in');
 echo form_close();
 ```
@@ -529,9 +575,14 @@ Complete defaults and comments are in `application/config/aauth.php`.
 | `totp_two_step_login_active` | Use a separate second-factor page |
 | `totp_two_step_login_redirect` | Second-factor page path |
 | `totp_issuer`, `totp_label`, `totp_qr_script` | Provisioning display and QR asset |
-| `ddos_protection` | Enable IP attempt limiting |
-| `max_login_attempt`, `max_login_attempt_time_period` | Attempt limit and window |
-| `remove_successful_attempts` | Clear counter after login |
+| `login_throttling` | Enable application-level brute-force throttling |
+| `login_throttle_identifier_limit`, `login_throttle_ip_limit` | Password limits per identifier and IP |
+| `login_throttle_totp_identifier_limit`, `login_throttle_totp_ip_limit` | TOTP limits per account and IP |
+| `max_login_attempt_time_period`, `login_throttle_lockout_time` | Counter window and lockout duration |
+| `login_throttle_secret` | HMAC secret; falls back to CI `encryption_key` |
+| `login_throttle_cleanup_probability`, `login_throttle_cleanup_after` | Expired-bucket cleanup policy |
+| `remove_successful_attempts` | Clear successful account identifier counters |
+| `ddos_protection`, `max_login_attempt` | Deprecated configuration aliases |
 | `captcha_provider` | `false`, `recaptcha`, or `cap` |
 | `recaptcha_login_attempts` | Attempts before CAPTCHA appears |
 | `recaptcha_siteKey`, `recaptcha_secret` | reCAPTCHA credentials |

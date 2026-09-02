@@ -34,7 +34,16 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |
 |   ['additional_valid_chars']          Additional valid chars for username. Non alphanumeric characters that are allowed by default
 |
-|   ['ddos_protection']                 Enables the DDoS Protection, user will be banned temporary when he exceed the login 'try'
+|   ['login_throttling']                Enables application-level brute-force throttling
+|   ['ddos_protection']                 Deprecated alias of login_throttling; NULL lets the new option decide
+|   ['login_throttle_identifier_limit'] Failed logins allowed per normalized identifier and window
+|   ['login_throttle_ip_limit']         Failed logins allowed per IP address and window
+|   ['login_throttle_totp_identifier_limit'] Failed TOTP checks allowed per account and window
+|   ['login_throttle_totp_ip_limit']    Failed TOTP checks allowed per IP address and window
+|   ['login_throttle_lockout_time']     Temporary lockout duration (PHP relative date format)
+|   ['login_throttle_secret']           HMAC secret; falls back to CodeIgniter's encryption_key
+|   ['login_throttle_cleanup_probability'] Chance in N of deleting expired throttle buckets (0 disables it)
+|   ['login_throttle_cleanup_after']    Age after which inactive throttle buckets are deleted
 |
 |   ['captcha_provider']                Active CAPTCHA provider: FALSE, 'recaptcha' or 'cap'
 |   ['recaptcha_active']                Legacy reCAPTCHA toggle. Keep FALSE when captcha_provider is used
@@ -56,9 +65,9 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |   ['totp_label']                      TOTP account label; supports {issuer}, {site}, {email}, {username}
 |   ['totp_qr_script']                  Public path to the locally hosted QR renderer
 |
-|   ['max_login_attempt']               Login attempts time interval (default 10 times in one hour)
-|   ['max_login_attempt_time_period']   Period of time for max login attempts (default "5 minutes")
-|   ['remove_successful_attempts']      Enables removing login attempt after successful login
+|   ['max_login_attempt']               Deprecated legacy limit; NULL uses the separate limits above
+|   ['max_login_attempt_time_period']   Window shared by the IP and identifier counters
+|   ['remove_successful_attempts']      Clear the identifier counter after a successful login
 |
 |   ['login_with_name']                 Login Identificator, if TRUE username needed to login else email address.
 |
@@ -114,7 +123,16 @@ $config_aauth["default"] = array(
 
  'additional_valid_chars'         => array(),
 
- 'ddos_protection'                => true,
+ 'login_throttling'               => true,
+ 'ddos_protection'                => null,
+ 'login_throttle_identifier_limit'=> 5,
+ 'login_throttle_ip_limit'        => 30,
+ 'login_throttle_totp_identifier_limit' => 10,
+ 'login_throttle_totp_ip_limit'   => 30,
+ 'login_throttle_lockout_time'    => '15 minutes',
+ 'login_throttle_secret'          => '',
+ 'login_throttle_cleanup_probability' => 100,
+ 'login_throttle_cleanup_after'   => '1 day',
 
  'captcha_provider'               => false,
  'recaptcha_active'               => false,
@@ -136,8 +154,8 @@ $config_aauth["default"] = array(
  'totp_label'                     => '{issuer} - {email}',
  'totp_qr_script'                 => 'assets/js/qr-creator.min.js',
 
- 'max_login_attempt'              => 10,
- 'max_login_attempt_time_period'  => "5 minutes",
+ 'max_login_attempt'              => null,
+ 'max_login_attempt_time_period'  => "15 minutes",
  'remove_successful_attempts'     => true,
 
  'login_with_name'                => false,

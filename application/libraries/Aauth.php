@@ -123,6 +123,7 @@ class Aauth {
  		// config/aauth.php
 		$this->CI->config->load('aauth');
 		$this->config_vars = $this->CI->config->item('aauth');
+		$this->configure_login_throttling();
 		$this->captcha_provider = $this->resolve_captcha_provider();
 
 		$this->aauth_db = $this->CI->load->database($this->config_vars['db_profile'], true);
@@ -140,6 +141,40 @@ class Aauth {
 		$this->precache_perms();
 		$this->precache_groups();
 
+	}
+
+	/**
+	 * Supply v3 throttling defaults while keeping older application config files
+	 * usable. The legacy max_login_attempt value becomes the identifier limit;
+	 * the IP limit is deliberately higher to avoid penalizing shared networks.
+	 */
+	private function configure_login_throttling() {
+		$legacy_enabled = array_key_exists('ddos_protection', $this->config_vars)
+			&& $this->config_vars['ddos_protection'] !== null
+			? (bool) $this->config_vars['ddos_protection']
+			: null;
+		$legacy_limit = !empty($this->config_vars['max_login_attempt'])
+			? max(1, (int) $this->config_vars['max_login_attempt'])
+			: null;
+
+		$defaults = array(
+			'login_throttling' => $legacy_enabled !== null ? $legacy_enabled : true,
+			'login_throttle_identifier_limit' => $legacy_limit ?: 5,
+			'login_throttle_ip_limit' => $legacy_limit ? max(30, $legacy_limit * 3) : 30,
+			'login_throttle_totp_identifier_limit' => 10,
+			'login_throttle_totp_ip_limit' => 30,
+			'login_throttle_lockout_time' => '15 minutes',
+			'login_throttle_secret' => '',
+			'login_throttle_cleanup_probability' => 100,
+			'login_throttle_cleanup_after' => '1 day',
+			'max_login_attempt_time_period' => '15 minutes',
+			'remove_successful_attempts' => true,
+		);
+
+		$this->config_vars = array_merge($defaults, $this->config_vars);
+		if ($legacy_enabled !== null) {
+			$this->config_vars['login_throttling'] = $legacy_enabled;
+		}
 	}
 	
 	/**
@@ -194,17 +229,17 @@ class Aauth {
 	/**
 	 * Whether a CAPTCHA is required for the current login attempt.
 	 */
-	private function captcha_is_required() {
+	private function captcha_is_required($identifier = false) {
 		return $this->captcha_provider
-			&& $this->config_vars['ddos_protection']
-			&& $this->get_login_attempts() >= $this->config_vars['recaptcha_login_attempts'];
+			&& $this->config_vars['login_throttling']
+			&& $this->get_login_attempts($identifier) >= $this->config_vars['recaptcha_login_attempts'];
 	}
 
 	/**
 	 * Verify the response for the configured CAPTCHA provider.
 	 */
-	private function verify_captcha_response() {
-		if (!$this->captcha_is_required()) {
+	private function verify_captcha_response($identifier = false) {
+		if (!$this->captcha_is_required($identifier)) {
 			return true;
 		}
 
@@ -259,17 +294,9 @@ class Aauth {
 	 * @return bool Indicates successful login.
 	 */
 	public function login($identifier, $pass, $totp_code = null) {
-		if (!$this->verify_captcha_response()) {
-			return false;
-		}
-		if ($this->config_vars['ddos_protection'] && ! $this->update_login_attempts()) {
-
-			$this->error($this->CI->lang->line('aauth_error_login_attempts_exceeded'));
-			return false;
-		}
 		if( $this->config_vars['login_with_name'] == true){
 
-			if (!$identifier OR !is_string($pass) OR $pass === '')
+			if (!is_string($identifier) OR trim($identifier) === '' OR !is_string($pass) OR $pass === '')
 			{
 				$this->error($this->CI->lang->line('aauth_error_login_failed_name'));
 				return false;
@@ -277,7 +304,7 @@ class Aauth {
 			$db_identifier = 'username';
 		}else{
 			$this->CI->load->helper('email');
-			if (!valid_email($identifier) OR !is_string($pass) OR $pass === '')
+			if (!is_string($identifier) OR !valid_email($identifier) OR !is_string($pass) OR $pass === '')
 			{
 				$this->error($this->CI->lang->line('aauth_error_login_failed_email'));
 				return false;
@@ -285,41 +312,44 @@ class Aauth {
 			$db_identifier = 'email';
 		}
 
-		// An unverified email is an account state of its own, not a ban.
-		$query = null;
-		$query = $this->aauth_db->where($db_identifier, $identifier);
-		$query = $this->aauth_db->where('email_verified_at', null);
-		$query = $this->aauth_db->get($this->config_vars['users']);
-
-		if ($query->num_rows() > 0) {
-			$this->error($this->CI->lang->line('aauth_error_account_not_verified'));
+		$identifier = trim($identifier);
+		$throttle_identifier = $this->normalize_login_identifier($identifier);
+		if ($this->config_vars['login_throttling'] && !$this->login_attempt_is_allowed($throttle_identifier)) {
+			log_message('info', 'Aauth login throttled for IP and/or identifier bucket.');
+			$this->error($this->CI->lang->line('aauth_error_login_attempts_exceeded'));
+			return false;
+		}
+		if (!$this->verify_captcha_response($throttle_identifier)) {
+			$this->record_login_failure($throttle_identifier);
 			return false;
 		}
 
-		// Find the user and create the authenticated session.
+		// Fetch the account once, then evaluate its independent states.
 		$query = $this->aauth_db->where($db_identifier, $identifier);
 		$query = $this->aauth_db->get($this->config_vars['users']);
 
 		if($query->num_rows() == 0){
-			$this->error($this->CI->lang->line('aauth_error_no_user'));
-			return false;
-		}
-		$query = null;
-		$query = $this->aauth_db->where($db_identifier, $identifier);
-		$query = $this->aauth_db->where('email_verified_at IS NOT NULL', null, false);
-		$query = $this->aauth_db->where('banned_at', null);
-
-		$query = $this->aauth_db->get($this->config_vars['users']);
-
-		if ($query->num_rows() === 0) {
 			$this->error($this->CI->lang->line('aauth_error_login_failed_all'));
+			$this->record_login_failure($throttle_identifier);
+			return false;
+		}
+		$row = $query->row();
+
+		if ($row->email_verified_at === null) {
+			$this->error($this->CI->lang->line('aauth_error_login_failed_all'));
+			$this->record_login_failure($throttle_identifier);
 			return false;
 		}
 
-		$row = $query->row();
+		if ($row->banned_at !== null) {
+			$this->error($this->CI->lang->line('aauth_error_login_failed_all'));
+			$this->record_login_failure($throttle_identifier);
+			return false;
+		}
 
 		if (!$this->verify_password($pass, $row->pass, $row->id)) {
 			$this->error($this->CI->lang->line('aauth_error_login_failed_all'));
+			$this->record_login_failure($throttle_identifier);
 			return false;
 		}
 
@@ -337,8 +367,16 @@ class Aauth {
 				return false;
 			}
 
+			if ($this->config_vars['login_throttling']
+				&& !$this->login_attempt_is_allowed($throttle_identifier, 'totp')) {
+				log_message('info', 'Aauth TOTP verification throttled for IP and/or identifier bucket.');
+				$this->error($this->CI->lang->line('aauth_error_login_attempts_exceeded'));
+				return false;
+			}
+
 			if (!$this->verify_totp_code($row->totp_secret, $totp_code)) {
 				$this->error($this->CI->lang->line('aauth_error_totp_code_invalid'));
+				$this->record_login_failure($throttle_identifier, 'totp');
 				return false;
 			}
 		}
@@ -395,7 +433,10 @@ class Aauth {
 		$this->update_activity($user->id);
 
 		if ($this->config_vars['remove_successful_attempts']) {
-			$this->reset_login_attempts();
+			$identifier_field = $this->config_vars['login_with_name'] ? 'username' : 'email';
+			$identifier = $this->normalize_login_identifier($user->{$identifier_field});
+			$this->reset_login_attempt_buckets($identifier, 'login', false);
+			$this->reset_login_attempt_buckets($identifier, 'totp', false);
 		}
 
 		return true;
@@ -472,15 +513,16 @@ class Aauth {
 	 * 
 	 * @return bool Reset fails/succeeds
 	 */
-	public function reset_login_attempts() {
-		$ip_address = $this->CI->input->ip_address();
-		$this->aauth_db->where(
-			array(
-				'ip_address'=>$ip_address,
-				'timestamp >='=>date("Y-m-d H:i:s", strtotime("-".$this->config_vars['max_login_attempt_time_period']))
-			)
+	public function reset_login_attempts($identifier = false) {
+		if ($identifier === false) {
+			return $this->reset_login_attempt_buckets(false, 'login', true);
+		}
+
+		return $this->reset_login_attempt_buckets(
+			$this->normalize_login_identifier($identifier),
+			'login',
+			true
 		);
-		return $this->aauth_db->delete($this->config_vars['login_attempts']);
 	}
 
 	/**
@@ -738,65 +780,234 @@ class Aauth {
 
 
 	/**
-	 * Update login attempt and if exceeds return FALSE
-	 * 
-	 * @return bool
+	 * Record a failed login attempt. Passing an identifier updates both the IP
+	 * and identifier buckets; omitting it preserves the old IP-only helper API.
+	 *
+	 * @param string|bool $identifier Login email/username, or FALSE
+	 * @return bool TRUE when a following attempt is still allowed
 	 */
-	public function update_login_attempts() {
-		$ip_address = $this->CI->input->ip_address();
-		$query = $this->aauth_db->where(
-			array(
-				'ip_address'=>$ip_address,
-				'timestamp >='=>date("Y-m-d H:i:s", strtotime("-".$this->config_vars['max_login_attempt_time_period']))
-			)
-		);
-		$query = $this->aauth_db->get( $this->config_vars['login_attempts'] );
+	public function update_login_attempts($identifier = false) {
+		$normalized = $identifier === false
+			? false
+			: $this->normalize_login_identifier($identifier);
+		$this->record_login_failure($normalized);
 
-		if($query->num_rows() == 0){
-			$data = array();
-			$data['ip_address'] = $ip_address;
-			$data['timestamp']= date("Y-m-d H:i:s");
-			$data['login_attempts']= 1;
-			$this->aauth_db->insert($this->config_vars['login_attempts'], $data);
-			return true;
-		}else{
-			$row = $query->row();
-			$data = array();
-			$data['timestamp'] = date("Y-m-d H:i:s");
-			$data['login_attempts'] = $row->login_attempts + 1;
-			$this->aauth_db->where('id', $row->id);
-			$this->aauth_db->update($this->config_vars['login_attempts'], $data);
-
-			if ( $data['login_attempts'] > $this->config_vars['max_login_attempt'] ) {
-				return false;
-			} else {
-				return true;
-			}
-		}
-
+		return $this->login_attempt_is_allowed($normalized);
 	}
 
 	/**
-	 * Get login attempt
-	 * 
+	 * Return the largest active login counter for the current IP and, when
+	 * supplied, the normalized identifier.
+	 *
+	 * @param string|bool $identifier Login email/username, or FALSE
 	 * @return int
 	 */
-	public function get_login_attempts() {
-		$ip_address = $this->CI->input->ip_address();
-		$query = $this->aauth_db->where(
-			array(
-				'ip_address'=>$ip_address,
-				'timestamp >='=>date("Y-m-d H:i:s", strtotime("-".$this->config_vars['max_login_attempt_time_period']))
-			)
-		);
-		$query = $this->aauth_db->get( $this->config_vars['login_attempts'] );
+	public function get_login_attempts($identifier = false) {
+		$normalized = $identifier === false
+			? false
+			: $this->normalize_login_identifier($identifier);
+		$buckets = $this->login_throttle_buckets($normalized, 'login');
+		$cutoff = $this->login_throttle_cutoff();
+		$maximum = 0;
 
-		if($query->num_rows() != 0){
-			$row = $query->row();
-			return $row->login_attempts;
+		foreach ($buckets as $bucket) {
+			$row = $this->get_login_throttle_bucket($bucket);
+			if ($row && $row->window_started_at >= $cutoff) {
+				$maximum = max($maximum, (int) $row->attempts);
+			}
 		}
 
-		return 0;
+		return $maximum;
+	}
+
+	/**
+	 * Remove inactive throttle buckets. Suitable for a scheduled maintenance
+	 * task; failed logins also run it occasionally according to configuration.
+	 *
+	 * @return bool
+	 */
+	public function cleanup_login_attempts() {
+		$cutoff = $this->relative_login_throttle_date(
+			$this->config_vars['login_throttle_cleanup_after'],
+			true,
+			'1 day'
+		);
+		$this->aauth_db->where('updated_at <', $cutoff);
+		$this->aauth_db->group_start();
+		$this->aauth_db->where('blocked_until', null);
+		$this->aauth_db->or_where('blocked_until <', date('Y-m-d H:i:s'));
+		$this->aauth_db->group_end();
+
+		return $this->aauth_db->delete($this->config_vars['login_attempts']);
+	}
+
+	private function normalize_login_identifier($identifier) {
+		$identifier = trim((string) $identifier);
+
+		return function_exists('mb_strtolower')
+			? mb_strtolower($identifier, 'UTF-8')
+			: strtolower($identifier);
+	}
+
+	private function login_throttle_buckets($identifier = false, $context = 'login') {
+		$prefix = $context === 'totp' ? 'totp' : 'login';
+		$buckets = array(array(
+			'scope' => $prefix . '_ip',
+			'value' => (string) $this->CI->input->ip_address(),
+			'limit' => (int) $this->config_vars[
+				$prefix === 'totp' ? 'login_throttle_totp_ip_limit' : 'login_throttle_ip_limit'
+			],
+		));
+
+		if ($identifier !== false && $identifier !== '') {
+			$buckets[] = array(
+				'scope' => $prefix . '_identifier',
+				'value' => $identifier,
+				'limit' => (int) $this->config_vars[
+					$prefix === 'totp'
+						? 'login_throttle_totp_identifier_limit'
+						: 'login_throttle_identifier_limit'
+				],
+			);
+		}
+
+		return $buckets;
+	}
+
+	private function login_throttle_hash($scope, $value) {
+		$secret = trim((string) $this->config_vars['login_throttle_secret']);
+		if ($secret === '') {
+			$secret = (string) $this->CI->config->item('encryption_key');
+		}
+		if ($secret === '') {
+			throw new RuntimeException(
+				'Aauth login throttling requires login_throttle_secret or CodeIgniter encryption_key.'
+			);
+		}
+
+		return hash_hmac('sha256', $scope . "\0" . $value, $secret);
+	}
+
+	private function get_login_throttle_bucket($bucket) {
+		$query = $this->aauth_db->where(array(
+			'scope' => $bucket['scope'],
+			'key_hash' => $this->login_throttle_hash($bucket['scope'], $bucket['value']),
+		));
+		$query = $this->aauth_db->get($this->config_vars['login_attempts']);
+
+		return $query->num_rows() ? $query->row() : false;
+	}
+
+	private function login_attempt_is_allowed($identifier = false, $context = 'login') {
+		if (!$this->config_vars['login_throttling']) {
+			return true;
+		}
+
+		$now = date('Y-m-d H:i:s');
+		$cutoff = $this->login_throttle_cutoff();
+		foreach ($this->login_throttle_buckets($identifier, $context) as $bucket) {
+			$row = $this->get_login_throttle_bucket($bucket);
+			if (!$row) {
+				continue;
+			}
+			if ($row->blocked_until !== null && $row->blocked_until > $now) {
+				return false;
+			}
+			if ($row->window_started_at >= $cutoff
+				&& (int) $row->attempts >= max(1, $bucket['limit'])) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private function record_login_failure($identifier = false, $context = 'login') {
+		if (!$this->config_vars['login_throttling']) {
+			return;
+		}
+
+		$now = date('Y-m-d H:i:s');
+		$cutoff = $this->login_throttle_cutoff();
+		$blocked_until = $this->relative_login_throttle_date(
+			$this->config_vars['login_throttle_lockout_time'],
+			false,
+			'15 minutes'
+		);
+		$table = $this->aauth_db->protect_identifiers($this->config_vars['login_attempts'], true);
+
+		foreach ($this->login_throttle_buckets($identifier, $context) as $bucket) {
+			$limit = max(1, $bucket['limit']);
+			$sql = "INSERT INTO {$table} "
+				. "(scope, key_hash, window_started_at, attempts, blocked_until, updated_at) "
+				. "VALUES (?, ?, ?, 1, ?, ?) "
+				. "ON DUPLICATE KEY UPDATE "
+				. "blocked_until = CASE "
+				. "WHEN window_started_at < ? THEN NULL "
+				. "WHEN attempts + 1 >= ? THEN ? ELSE blocked_until END, "
+				. "attempts = CASE WHEN window_started_at < ? THEN 1 "
+				. "ELSE LEAST(attempts + 1, 65535) END, "
+				. "window_started_at = CASE WHEN window_started_at < ? THEN ? ELSE window_started_at END, "
+				. "updated_at = ?";
+			$insert_blocked_until = $limit === 1 ? $blocked_until : null;
+			$this->aauth_db->query($sql, array(
+				$bucket['scope'],
+				$this->login_throttle_hash($bucket['scope'], $bucket['value']),
+				$now,
+				$insert_blocked_until,
+				$now,
+				$cutoff,
+				$limit,
+				$blocked_until,
+				$cutoff,
+				$cutoff,
+				$now,
+				$now,
+			));
+		}
+
+		$probability = max(0, (int) $this->config_vars['login_throttle_cleanup_probability']);
+		if ($probability > 0 && random_int(1, $probability) === 1) {
+			$this->cleanup_login_attempts();
+		}
+	}
+
+	private function reset_login_attempt_buckets($identifier, $context, $include_ip) {
+		$buckets = $this->login_throttle_buckets($identifier, $context);
+		$deleted = true;
+		foreach ($buckets as $bucket) {
+			if (!$include_ip && substr($bucket['scope'], -3) === '_ip') {
+				continue;
+			}
+			$this->aauth_db->where(array(
+				'scope' => $bucket['scope'],
+				'key_hash' => $this->login_throttle_hash($bucket['scope'], $bucket['value']),
+			));
+			$deleted = $this->aauth_db->delete($this->config_vars['login_attempts']) && $deleted;
+		}
+
+		return $deleted;
+	}
+
+	private function login_throttle_cutoff() {
+		return $this->relative_login_throttle_date(
+			$this->config_vars['max_login_attempt_time_period'],
+			true,
+			'15 minutes'
+		);
+	}
+
+	private function relative_login_throttle_date($relative, $past, $fallback) {
+		$relative = ltrim(trim((string) $relative), '+- ');
+		if ($relative === '') {
+			$relative = $fallback;
+		}
+		$timestamp = strtotime(($past ? '-' : '+') . $relative);
+		if ($timestamp === false) {
+			$timestamp = strtotime(($past ? '-' : '+') . $fallback);
+		}
+
+		return date('Y-m-d H:i:s', $timestamp);
 	}
 
 	########################
@@ -2966,10 +3177,11 @@ class Aauth {
 	/**
 	 * Generate the CAPTCHA field HTML.
 	 *
+	 * @param string|bool $identifier Current login identifier, when known
 	 * @return string HTML for the CAPTCHA field, or an empty string if CAPTCHA is not required.
 	 */
-	public function generate_captcha_field(){
-		if (!$this->captcha_is_required()) {
+	public function generate_captcha_field($identifier = false){
+		if (!$this->captcha_is_required($identifier)) {
 			return '';
 		}
 
@@ -2998,8 +3210,8 @@ class Aauth {
 	/**
 	 * Backward-compatible alias.
 	 */
-	public function generate_recaptcha_field(){
-		return $this->generate_captcha_field();
+	public function generate_recaptcha_field($identifier = false){
+		return $this->generate_captcha_field($identifier);
 	}
 
 	/**
@@ -3106,9 +3318,18 @@ class Aauth {
 			return false;
 		}
 		$user = $query->row();
+		$identifier_field = $this->config_vars['login_with_name'] ? 'username' : 'email';
+		$identifier = $this->normalize_login_identifier($user->{$identifier_field});
+		if ($this->config_vars['login_throttling']
+			&& !$this->login_attempt_is_allowed($identifier, 'totp')) {
+			log_message('info', 'Aauth TOTP verification throttled for IP and/or identifier bucket.');
+			$this->error($this->CI->lang->line('aauth_error_login_attempts_exceeded'));
+			return false;
+		}
 		if (!$this->verify_totp_code($user->totp_secret, $totp_code)) {
 			$this->error($this->CI->lang->line('aauth_error_totp_code_invalid'));
-			if ($this->config_vars['ddos_protection'] && !$this->update_login_attempts()) {
+			$this->record_login_failure($identifier, 'totp');
+			if (!$this->login_attempt_is_allowed($identifier, 'totp')) {
 				$this->error($this->CI->lang->line('aauth_error_login_attempts_exceeded'));
 			}
 			return false;

@@ -22,7 +22,8 @@ CodeIgniter 2.x is no longer supported.
 - Independent email-verification and account-ban states.
 - User, group, subgroup, and permission management.
 - Google reCAPTCHA or self-hosted [Cap](https://trycap.dev/guide/) CAPTCHA.
-- Per-user variables, private messages, and login-attempt protection.
+- Per-user variables, private messages, and independent per-IP/per-identifier
+  login throttling.
 - Hardened `utf8mb4` SQL schema with constraints and useful indexes.
 - Minimal controller and views demonstrating the authentication flows.
 
@@ -32,6 +33,8 @@ CodeIgniter 2.x is no longer supported.
 - CodeIgniter 3.x or the compatible pocketarc fork.
 - MySQL or MariaDB with InnoDB support.
 - A configured CodeIgniter session driver.
+- A configured CodeIgniter `encryption_key`, or a dedicated
+  `login_throttle_secret` in Aauth configuration.
 - A configured email service when verification or recovery emails are enabled.
 
 ## Fresh installation
@@ -49,6 +52,11 @@ CodeIgniter 2.x is no longer supported.
 3. Check `application/config/database.php`, then configure `db_profile`, table
    names, email, password policy, verification, TOTP, and CAPTCHA in
    `application/config/aauth.php`.
+
+   Generate a dedicated throttling secret once with
+   `bin2hex(random_bytes(32))`, store it outside version control, and assign it
+   to `login_throttle_secret`. CodeIgniter's `encryption_key` is used as a
+   fallback.
 
 4. Load the library from a controller or through CodeIgniter autoloading:
 
@@ -112,6 +120,7 @@ Run the scripts from `sql/migrations/v2.x-3.x/` once in this order:
 4. `04_schema_preflight.sql`
 5. Resolve every row reported by the read-only preflight.
 6. `05_schema_hardening.sql`
+7. `06_login_throttling.sql`
 
 See the [migration guide](sql/migrations/v2.x-3.x/README.md) for details.
 
@@ -128,6 +137,9 @@ Application changes requiring attention:
   hashed tokens and enforces expiration.
 - Resolve duplicates and orphaned relations reported by the SQL preflight
   before applying the new constraints.
+- Migration 06 recreates the temporary login-attempt table and discards its
+  old IP-only counters. Set `login_throttle_secret`, or configure
+  CodeIgniter's `encryption_key`, before putting the application online.
 
 Read the [v3.0.0 changelog](CHANGELOG.md#v300-20260902---breaking-release) for
 the complete list of breaking changes.

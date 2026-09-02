@@ -39,7 +39,7 @@ $lang['aauth_error_no_access'] = "Désolé, vous n'avez pas accès à cette ress
 $lang['aauth_error_login_failed_email'] = "L'adresse email et le mot de passe ne correspondent pas.";
 $lang['aauth_error_login_failed_name'] = "Le nom d'utilisateur et le mot de passe ne correspondent pas.";
 $lang['aauth_error_login_failed_all'] = "L'adresse email, le nom d'utilisateur ou le mot de passe ne correspondent pas.";
-$lang['aauth_error_login_attempts_exceeded'] = "Vous avez dépassé le nombre de tentatives de connexion autorisées, votre compte a été bloqué.";
+$lang['aauth_error_login_attempts_exceeded'] = "Trop de tentatives d'authentification. Veuillez réessayer plus tard.";
 $lang['aauth_error_recaptcha_not_correct'] = 'Désolé, le texte renseigné pour le reCAPTCHA est incorrect.';
 $lang['aauth_error_captcha_not_correct'] = 'La vérification CAPTCHA a échoué.';
 
