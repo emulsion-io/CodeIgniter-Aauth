@@ -1,5 +1,110 @@
 ## Change Log
 
+### v3.0.0 (2026/09/02) - Breaking release
+
+Aauth 3 is a major compatibility and security update. Applications upgrading
+from 2.x must review the breaking changes and run the numbered database
+migrations before deploying the new library.
+
+#### Breaking changes
+
+- PHP 8.2 or newer is required.
+- CodeIgniter 2.x support has been removed. The supported target is
+  CodeIgniter 3.x and the compatible fork at
+  <https://github.com/pocketarc/codeigniter>.
+- The persistent remember-me cookie has been removed. Authentication now relies
+  exclusively on the CodeIgniter session, and `remember_time` / `remember_exp`
+  are removed from the user table.
+- `login()` now uses `login($identifier, $password, $totpCode = null)`. The old
+  remember-me argument is no longer accepted.
+- Password recovery now uses expiring, single-use reset links. The modern call
+  is `reset_password($token, $newPassword)`.
+- Legacy one-argument `reset_password($token)` calls require the explicit
+  `password_recovery_mode => generated_password` compatibility option. The
+  secure default remains `link`.
+- Email verification and account banning are now independent states. The old
+  `banned` flag is replaced by `email_verified_at`, `banned_at`, and
+  `ban_reason`.
+- Old password-reset and email-verification tokens are intentionally invalidated
+  because earlier versions stored reusable tokens without enforced expiry.
+- The v2 SQL installation files have been replaced by `sql/Aauth_v3.sql`.
+  Existing databases must use the migrations listed below rather than importing
+  the installation schema, which drops and recreates Aauth tables.
+
+#### Security
+
+- Native `password_hash()` is enabled by default. Valid legacy hashes are
+  transparently upgraded at the next successful login, and hashes are rehashed
+  automatically when the configured algorithm or options change.
+- Password reset and email verification use random 256-bit tokens. Only their
+  SHA-256 digests are stored, and both token types have configurable expiration
+  times and single-use semantics.
+- Generated-password recovery remains available only as an opt-in compatibility
+  mode. It uses a cryptographically secure generated password and rolls back the
+  database transaction if email delivery fails.
+- Login regenerates the CodeIgniter session identifier after successful
+  authentication.
+- Password validation consistently enforces the configured minimum and maximum
+  lengths when creating, updating, or resetting credentials. Login deliberately
+  continues accepting valid legacy credentials so they can be transparently
+  migrated even when an older password no longer meets the current policy.
+- TOTP verification is integrated into the login flow without authenticating
+  the session before the second factor succeeds.
+
+#### Added
+
+- Self-hosted [Cap](https://trycap.dev/guide/) CAPTCHA support with checkbox and
+  invisible modes. Cap and reCAPTCHA can coexist in the codebase, but only one
+  provider can be active at a time.
+- A minimal `Account` demonstration controller and inline-styled views for
+  login, forgotten-password requests, password reset, TOTP verification, TOTP
+  setup, and the authenticated dashboard.
+- Local TOTP QR rendering through the vendored `qr-creator` JavaScript library;
+  provisioning secrets are no longer sent to Google Charts or another remote QR
+  service.
+- Configurable TOTP issuer and label templates, including `{issuer}`, `{site}`,
+  `{email}`, and `{username}` placeholders.
+- `create_password_reset_link()` and `create_verification_link()` for generating
+  links without forcing email delivery.
+- `is_password_reset_token_valid()` for validating a reset form before accepting
+  a new password.
+- `is_member_of_any()` and `is_member_of_all()`. `is_member()` now accepts a
+  group name or ID, the legacy pipe-separated syntax, or an array of groups.
+- Optional ban reasons through `ban_user($userId, $reason)` while retaining
+  compatibility with `ban_user($userId)`.
+- French messages for the new CAPTCHA and hardened verification flows.
+
+#### Changed
+
+- TOTP provisioning URIs use the standard `otpauth://` format and are rendered
+  locally without jQuery.
+- Changing an account email invalidates its previous verification and sends a
+  fresh verification link when verification is enabled.
+- Banning no longer destroys verification state, and verifying an email no
+  longer unbans an account.
+- Banned or unverified accounts cannot authenticate or request a password reset.
+- The SQL schema now uses `utf8mb4`, unique constraints, foreign keys with
+  cascading cleanup, and query-oriented indexes. Email fields support 254
+  characters and IP fields support 45-character IPv6 addresses.
+- Group, permission, private-message, validation, and PHP 8.2+ compatibility
+  code has been cleaned and hardened.
+- Project metadata now identifies version 3, PHP 8.2+, the compatible
+  CodeIgniter fork, and contributor Simonet Fabrice
+  <fabrice@emulsion.io>.
+
+#### Database upgrade from 2.x
+
+Back up the database, then follow
+`sql/migrations/v2.x-3.x/README.md`. Run the scripts once in this order:
+
+1. `01_remove_remember_me.sql`
+2. `02_email_verification.sql`
+3. `03_account_states.sql`
+4. `04_schema_preflight.sql` (read-only; every query must return zero rows)
+5. `05_schema_hardening.sql`
+
+Fresh installations should use only `sql/Aauth_v3.sql`.
+
 ### v2.5.12 (2016/9/21)
  - [ef8bfa0](https://github.com/emreakay/CodeIgniter-Aauth/commit/ef8bfa001442468c89886d3df29e799362a62542) add sort parameter to list_users (#176) (@REJack)
  - [e9e1503](https://github.com/emreakay/CodeIgniter-Aauth/commit/e9e15035d65796aa722a6a98d1201bef6497c6a8) is_allowed improvement (#166) (@REJack)
