@@ -2,6 +2,11 @@
 
 ### Unreleased
 
+- Add `set_as_read_all_pm($receiver_id = false)` and `delete_all_pm($user_id = false)`
+  for the logged-in user's mailbox or an administrator-selected user, excluding
+  already deleted messages and using a transaction for bulk
+  deletion of received and sent messages.
+
 - Add `login_fast($user_id)` for authenticated administrators to switch to a
   verified, non-banned account without its credentials, with session ID
   regeneration and an info-level log recording the administrator and target IDs.

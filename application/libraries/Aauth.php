@@ -2850,6 +2850,66 @@ class Aauth {
 	}
 
 	/**
+	 * Delete all received and sent private messages for a user.
+	 * Only logged-in administrators can target another user's mailbox.
+	 * Preserve the other participant's copy, using delete_pm() semantics.
+	 * Requires transaction support in the database for atomic deletion.
+	 *
+	 * @param int|bool $user_id User id, or FALSE for the current user
+	 * @return bool Delete success/failure (an empty mailbox succeeds)
+	 */
+	public function delete_all_pm($user_id = false){
+		$current = (int) $this->CI->session->userdata('id');
+		if (!$this->is_loggedin() || $current < 1) {
+			return false;
+		}
+
+		$user_id = $user_id === false ? $current : $user_id;
+		if ((!is_int($user_id) && !is_string($user_id))
+			|| !ctype_digit((string) $user_id) || (int) $user_id < 1
+			|| (string) (int) $user_id !== (string) $user_id) {
+			return false;
+		}
+		$user_id = (int) $user_id;
+		if ($user_id !== $current && !$this->is_admin($current)) {
+			return false;
+		}
+
+		if (!$this->aauth_db->trans_begin()) {
+			return false;
+		}
+
+		$query = $this->aauth_db->select('id')
+			->group_start()
+				->where('receiver_id', $user_id)
+				->where('pm_deleted_receiver', null)
+			->group_end()
+			->or_group_start()
+				->where('sender_id', $user_id)
+				->where('pm_deleted_sender', null)
+			->group_end()
+			->get($this->config_vars['pms']);
+		if ($query === false) {
+			$this->aauth_db->trans_rollback();
+			return false;
+		}
+
+		foreach ($query->result() as $message) {
+			if (!$this->delete_pm($message->id, $user_id)) {
+				$this->aauth_db->trans_rollback();
+				return false;
+			}
+		}
+
+		if ($this->aauth_db->trans_status() === false) {
+			$this->aauth_db->trans_rollback();
+			return false;
+		}
+
+		return $this->aauth_db->trans_commit();
+	}
+
+	/**
 	 * Cleanup PMs
 	 * Removes PMs older than 'pm_cleanup_max_age' (definied in aauth config).
 	 * recommend for a cron job
@@ -2907,6 +2967,36 @@ class Aauth {
 		$this->aauth_db->where('id', $pm_id);
 		$this->aauth_db->where('receiver_id', $user_id);
 		return $this->aauth_db->update($this->config_vars['pms'], $data);
+	}
+
+	/**
+	 * Mark all visible unread private messages as read for a user.
+	 * Only logged-in administrators can target another user's mailbox.
+	 *
+	 * @param int|bool $receiver_id Receiver id, or FALSE for the current user
+	 * @return bool Update success/failure (no unread messages succeeds)
+	 */
+	public function set_as_read_all_pm($receiver_id = false){
+		$current = (int) $this->CI->session->userdata('id');
+		if (!$this->is_loggedin() || $current < 1) {
+			return false;
+		}
+
+		$receiver_id = $receiver_id === false ? $current : $receiver_id;
+		if ((!is_int($receiver_id) && !is_string($receiver_id))
+			|| !ctype_digit((string) $receiver_id) || (int) $receiver_id < 1
+			|| (string) (int) $receiver_id !== (string) $receiver_id) {
+			return false;
+		}
+		$receiver_id = (int) $receiver_id;
+		if ($receiver_id !== $current && !$this->is_admin($current)) {
+			return false;
+		}
+
+		return $this->aauth_db->where('receiver_id', $receiver_id)
+			->where('pm_deleted_receiver', null)
+			->where('date_read', null)
+			->update($this->config_vars['pms'], array('date_read' => date('Y-m-d H:i:s')));
 	}
 
 	########################

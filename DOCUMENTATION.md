@@ -555,8 +555,24 @@ $unread = $this->aauth->count_unread_pms($receiverId);
 
 $this->aauth->set_as_read_pm($messageId, $receiverId);
 $this->aauth->delete_pm($messageId, $userId);
+$this->aauth->set_as_read_all_pm();
+$this->aauth->delete_all_pm();
 $this->aauth->cleanup_pms();
 ```
+
+`set_as_read_all_pm($receiver_id = false)` and `delete_all_pm($user_id = false)`
+default to the logged-in user's mailbox. A positive integer ID (or its decimal
+string representation) targets that user's mailbox; targeting another user
+requires the logged-in caller to be an administrator. Invalid IDs and unauthorized
+calls return `false`. For example, an administrator can call
+`$this->aauth->delete_all_pm($targetUserId)` to delete that user's received and sent
+messages. Both return a boolean, with `true` also returned
+when there is nothing to change. The first marks visible unread received messages
+as read, preserving existing read dates. The second deletes both received and sent
+messages for the target user while preserving the other participant's copy until
+they delete it too. Bulk deletion uses a transaction, so atomicity requires a
+transaction-capable database/table. It calls `delete_pm()` for each visible message
+and is intended for modest mailbox sizes.
 
 `cleanup_pms()` is intended for a scheduled task and uses
 `pm_cleanup_max_age`.
