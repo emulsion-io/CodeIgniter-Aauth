@@ -403,6 +403,48 @@ class Aauth {
 	}
 
 	/**
+	 * Switch an authenticated administrator to another account without credentials.
+	 * The target's password, CAPTCHA and TOTP are intentionally not required.
+	 * Call from a POST action protected by the application's CSRF validation.
+	 *
+	 * @param int|string $user_id Positive user ID.
+	 * @return bool Whether the session was switched.
+	 */
+	public function login_fast($user_id) {
+		if (!$this->is_loggedin() || $this->CI->session->userdata('totp_required') || !$this->is_admin()) {
+			$this->error($this->CI->lang->line('aauth_error_no_access'));
+			return false;
+		}
+
+		$admin = $this->get_user();
+		if (!$admin || $admin->banned_at !== null || $admin->email_verified_at === null) {
+			$this->error($this->CI->lang->line('aauth_error_no_access'));
+			return false;
+		}
+
+		if ((!is_int($user_id) && !is_string($user_id))
+			|| !preg_match('/^[1-9][0-9]*$/D', (string) $user_id)) {
+			$this->error($this->CI->lang->line('aauth_error_no_user'));
+			return false;
+		}
+
+		$user = $this->get_user($user_id);
+		if (!$user) {
+			return false;
+		}
+		if ($user->banned_at !== null || $user->email_verified_at === null) {
+			$this->error($this->CI->lang->line('aauth_error_login_failed_all'));
+			return false;
+		}
+
+		$result = $this->complete_login($user);
+		if ($result) {
+			log_message('info', 'Aauth login_fast: administrator ' . $admin->id . ' switched to user ' . $user->id . '.');
+		}
+		return $result;
+	}
+
+	/**
 	 * Determine whether a user must provide a TOTP code for this login.
 	 * 
 	 * @param object $user The user object.

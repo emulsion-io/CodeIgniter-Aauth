@@ -1,5 +1,11 @@
 ## Change Log
 
+### Unreleased
+
+- Add `login_fast($user_id)` for authenticated administrators to switch to a
+  verified, non-banned account without its credentials, with session ID
+  regeneration and an info-level log recording the administrator and target IDs.
+
 ### v3.0.0 (2026/09/02) - Breaking release
 
 Aauth 3 is a major compatibility and security update. Applications upgrading

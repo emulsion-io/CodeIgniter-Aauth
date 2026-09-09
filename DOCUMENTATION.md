@@ -52,6 +52,24 @@ if ($this->aauth->is_loggedin()) {
 $this->aauth->logout();
 ```
 
+An authenticated administrator can switch to an account by ID:
+
+```php
+// Inside a POST controller action protected by CodeIgniter CSRF validation.
+if ($this->aauth->login_fast(1)) {
+    redirect('account');
+}
+```
+
+`login_fast($user_id)` returns a boolean. It requires a current member of
+`admin_group` with no pending TOTP step, and both accounts must be verified
+and not banned. The target's password, CAPTCHA and TOTP are skipped. Success
+regenerates the session ID and replaces the authenticated identity with the
+target account, using the normal login timestamps and counter cleanup. Failures
+leave the current session unchanged. The switch is logged at the `info` level
+when enabled in CodeIgniter. There is no automatic return to the administrator
+account; sign in again to restore that identity.
+
 Aauth 3 has no remember-me cookie. Configure persistence through the
 CodeIgniter session driver.
 
